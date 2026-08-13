@@ -1,0 +1,15 @@
+# SQLite is seeded on every deploy (all game data is seed data).
+# Upgrade to Render Postgres later if you add user-generated records.
+
+services:
+  - type: web
+    name: swishit
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npx prisma migrate deploy && npm run db:seed && npm run build
+    startCommand: npx next start --hostname 0.0.0.0 --port $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        value: file:./prisma/dev.db

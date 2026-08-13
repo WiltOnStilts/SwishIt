@@ -31,11 +31,19 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env
+.env.local
+.env.*.local
 
-# vercel
-.vercel
+# local sqlite
+*.db
+*.db-journal
+
+# Basketball-Reference scrape cache (regenerate via scripts/expand-player-db.ts)
+/scripts/data/bref/
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma

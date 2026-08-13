@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Team {
+  id           String         @id @default(cuid())
+  name         String
+  abbreviation String
+  city         String
+  conference   String
+  playerSeasons PlayerSeason[]
+}
+
+model PlayerSeason {
+  id         String  @id @default(cuid())
+  playerName String
+  year       Int
+  teamId     String
+  team       Team    @relation(fields: [teamId], references: [id])
+  /// Comma-separated eligible slots, e.g. "PG,SG" (first is primary)
+  position   String
+  games      Int     @default(82)
+  mpg        Float   @default(0)
+  ppg        Float   @default(0)
+  rpg        Float   @default(0)
+  apg        Float   @default(0)
+  spg        Float   @default(0)
+  bpg        Float   @default(0)
+  fgPct      Float?
+  /// JSON string array of accolades e.g. ["All-NBA 1st","All-Star"]
+  accolades  String  @default("[]")
+  allStar    Boolean @default(false)
+  mvp        Boolean @default(false)
+  dpoy       Boolean @default(false)
+  champion   Boolean @default(false)
+
+  @@index([year, teamId])
+  @@index([playerName])
+  @@index([year, position])
+}
+
+model Coach {
+  id         String @id @default(cuid())
+  name       String @unique
+  /// JSON string array of teams coached
+  teams      String @default("[]")
+  /// Active coaching years covered, inclusive hints
+  startYear  Int?
+  endYear    Int?
+  /// JSON string array of accolades
+  accolades  String @default("[]")
+}
+
+model DetectivePuzzle {
+  id          String @id @default(cuid())
+  /// YYYY-MM-DD in America/New_York — null means bank puzzle for rotation
+  puzzleDate  String? @unique
+  title       String?
+  /// JSON: [{ label, difficulty: 1-10, members: string[4] }]
+  groups      String
+  createdAt   DateTime @default(now())
+}

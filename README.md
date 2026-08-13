@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SwishIt
 
-## Getting Started
+Mobile-first basketball minigame app with two modes:
 
-First, run the development server:
+1. **Undefeated** — spin a year + team, draft a starting five (position-locked) plus a sixth man from real season lines, then get an 82-game record and storylines vs all-time competition.
+2. **Detective** — daily NYT Connections-style puzzle with NBA players and coaches. Resets at midnight America/New_York. Scores out of 100 (time, accuracy, difficulty).
+
+## Quick start (local prototype)
 
 ```bash
+npm install
+npx prisma migrate dev --name init
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Local DB is SQLite (`DATABASE_URL=file:./prisma/dev.db`) so you can prototype without Docker.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Stack
 
-## Learn More
+- Next.js (App Router) + TypeScript + Tailwind
+- Prisma ORM
+- SQLite locally → Postgres on Render
 
-To learn more about Next.js, take a look at the following resources:
+## Expanding the Undefeated database
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Seed data lives in:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `prisma/data/players.ts` — player-seasons (1980–2026 coverage; prototype sample, expandable toward thousands)
+- `prisma/data/teams.ts`
+- `prisma/data/coaches.ts` — for Detective
+- `prisma/data/puzzles.ts` — dated daily boards + rotation bank
 
-## Deploy on Vercel
+Add rows, then `npm run db:seed`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Daily Detective puzzles
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Add a puzzle with `puzzleDate: "YYYY-MM-DD"` (ET calendar date) in `prisma/data/puzzles.ts`, re-seed, or insert via Prisma Studio. If no dated puzzle exists for today, a bank puzzle rotates by date.
+
+## Deploying to Render
+
+This repo includes a `render.yaml` Blueprint. It runs on SQLite: migrate + seed happen at build, then `next start`.
+
+1. Push this repo to GitHub.
+2. In Render: **New → Blueprint**, pick the repo, apply `render.yaml`.
+3. After the first deploy, open the service URL (e.g. `https://swishit.onrender.com`).
+
+Free web services spin down when idle — the first request after a nap can take a minute.
+
+Postgres is still the right move later if you store user data. Until then, seed-only SQLite is enough.
+
+## Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `npm run dev` | Local Next.js |
+| `npm run db:seed` | Reseed players, coaches, puzzles |
+| `npm run db:studio` | Browse the DB |
+| `npm run build` | Production build |
