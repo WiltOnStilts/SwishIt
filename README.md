@@ -59,3 +59,4 @@ Postgres is still the right move later if you store user data. Until then, seed-
 | `npm run db:seed` | Reseed players, coaches, puzzles |
 | `npm run db:studio` | Browse the DB |
 | `npm run build` | Production build |
+# SwishIt
