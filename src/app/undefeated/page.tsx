@@ -669,7 +669,7 @@ export default function UndefeatedGame() {
             className={`min-h-[4.5rem] rounded-xl border px-2 py-2 text-left transition ${
               highlightSlot === "sixth"
                 ? "border-[var(--orange)] bg-[var(--orange)]/30 ring-2 ring-[var(--orange)]"
-                : pendingPlayer && highlightSlot !== "sixth"
+                : pendingPlayer
                   ? "border-[var(--orange)]/70 bg-[var(--orange)]/15 ring-2 ring-[var(--orange)]"
                   : "border-[var(--line)] bg-[var(--tile)]"
             }`}
