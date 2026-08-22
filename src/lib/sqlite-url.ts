@@ -1,15 +1,18 @@
 import path from "node:path";
+import { ensureProductionSqlite } from "@/lib/ensure-database";
 
 /**
  * Resolve SQLite DATABASE_URL to an absolute file: URL.
- * Relative paths break on Render (cwd / read-only deploy FS).
+ * Production always uses /tmp (Render deploy FS is often read-only).
  */
 export function resolveSqliteUrl(raw?: string): string {
-  const fallback =
-    process.env.NODE_ENV === "production"
-      ? "file:/tmp/swishit.db"
-      : "file:./prisma/dev.db";
-  const value = (raw && raw.trim()) || fallback;
+  if (process.env.NODE_ENV === "production") {
+    const forced = ensureProductionSqlite();
+    if (forced) return forced;
+    return "file:/tmp/swishit.db";
+  }
+
+  const value = (raw && raw.trim()) || "file:./prisma/dev.db";
   if (!value.startsWith("file:")) return value;
 
   const filePath = value.slice("file:".length);
