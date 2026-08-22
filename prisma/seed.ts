@@ -1,13 +1,14 @@
 import "dotenv/config";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { resolveSqliteUrl } from "../src/lib/sqlite-url";
 import { players } from "./data/players";
 import { coaches } from "./data/coaches";
 import { puzzles } from "./data/puzzles";
 import { teams } from "./data/teams";
 import { EXTRA_POSITIONS } from "./data/positions";
 
-const url = process.env.DATABASE_URL ?? "file:./prisma/dev.db";
+const url = resolveSqliteUrl(process.env.DATABASE_URL);
 const adapter = new PrismaBetterSqlite3({ url });
 const prisma = new PrismaClient({ adapter });
 

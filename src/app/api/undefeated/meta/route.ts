@@ -59,75 +59,86 @@ function weightFromStrength(strength: number, isChampion: boolean): number {
 }
 
 export async function GET() {
-  const rows = await prisma.playerSeason.findMany({
-    select: {
-      year: true,
-      teamId: true,
-      team: true,
-      ppg: true,
-      rpg: true,
-      apg: true,
-      spg: true,
-      bpg: true,
-      mvp: true,
-      allStar: true,
-      champion: true,
-    },
-  });
+  try {
+    const rows = await prisma.playerSeason.findMany({
+      select: {
+        year: true,
+        teamId: true,
+        team: true,
+        ppg: true,
+        rpg: true,
+        apg: true,
+        spg: true,
+        bpg: true,
+        mvp: true,
+        allStar: true,
+        champion: true,
+      },
+    });
 
-  type Acc = { team: TeamMeta; powers: number[]; champion: boolean };
-  const byYearTeam = new Map<string, Acc>();
+    type Acc = { team: TeamMeta; powers: number[]; champion: boolean };
+    const byYearTeam = new Map<string, Acc>();
 
-  for (const r of rows) {
-    const key = `${r.year}:${r.teamId}`;
-    let acc = byYearTeam.get(key);
-    if (!acc) {
-      acc = {
-        team: {
-          id: r.team.id,
-          name: r.team.name,
-          abbreviation: r.team.abbreviation,
-          city: r.team.city,
-          spinWeight: 1,
-          strength: 0,
+    for (const r of rows) {
+      const key = `${r.year}:${r.teamId}`;
+      let acc = byYearTeam.get(key);
+      if (!acc) {
+        acc = {
+          team: {
+            id: r.team.id,
+            name: r.team.name,
+            abbreviation: r.team.abbreviation,
+            city: r.team.city,
+            spinWeight: 1,
+            strength: 0,
+            champion: false,
+          },
+          powers: [],
           champion: false,
-        },
-        powers: [],
-        champion: false,
-      };
-      byYearTeam.set(key, acc);
+        };
+        byYearTeam.set(key, acc);
+      }
+      acc.powers.push(roughPower(r));
+      if (r.champion) acc.champion = true;
     }
-    acc.powers.push(roughPower(r));
-    if (r.champion) acc.champion = true;
+
+    const teamsByYear: Record<number, TeamMeta[]> = {};
+    const rosterPool: RosterOption[] = [];
+
+    for (const [key, acc] of byYearTeam) {
+      const year = Number(key.split(":")[0]);
+      if (year < 1980 || year > 2026) continue;
+      const top = [...acc.powers].sort((a, b) => b - a).slice(0, 5);
+      const strength =
+        top.reduce((s, n) => s + n, 0) / Math.max(1, top.length);
+      acc.team.strength = Math.round(strength * 10) / 10;
+      acc.team.champion = acc.champion;
+      acc.team.spinWeight = weightFromStrength(strength, acc.champion);
+
+      if (!teamsByYear[year]) teamsByYear[year] = [];
+      teamsByYear[year].push(acc.team);
+      rosterPool.push({ year, team: acc.team });
+    }
+
+    for (const year of Object.keys(teamsByYear)) {
+      teamsByYear[Number(year)].sort((a, b) => a.city.localeCompare(b.city));
+    }
+
+    const years = Object.keys(teamsByYear)
+      .map(Number)
+      .sort((a, b) => a - b);
+    const yearWeights: Record<number, number> = {};
+    for (const y of years) yearWeights[y] = 1;
+
+    return NextResponse.json({ years, yearWeights, teamsByYear, rosterPool });
+  } catch (err) {
+    console.error("[undefeated/meta]", err);
+    return NextResponse.json(
+      {
+        error: "Could not load teams.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      { status: 500 },
+    );
   }
-
-  const teamsByYear: Record<number, TeamMeta[]> = {};
-  const rosterPool: RosterOption[] = [];
-
-  for (const [key, acc] of byYearTeam) {
-    const year = Number(key.split(":")[0]);
-    if (year < 1980 || year > 2026) continue;
-    const top = [...acc.powers].sort((a, b) => b - a).slice(0, 5);
-    const strength =
-      top.reduce((s, n) => s + n, 0) / Math.max(1, top.length);
-    acc.team.strength = Math.round(strength * 10) / 10;
-    acc.team.champion = acc.champion;
-    acc.team.spinWeight = weightFromStrength(strength, acc.champion);
-
-    if (!teamsByYear[year]) teamsByYear[year] = [];
-    teamsByYear[year].push(acc.team);
-    rosterPool.push({ year, team: acc.team });
-  }
-
-  for (const year of Object.keys(teamsByYear)) {
-    teamsByYear[Number(year)].sort((a, b) => a.city.localeCompare(b.city));
-  }
-
-  const years = Object.keys(teamsByYear)
-    .map(Number)
-    .sort((a, b) => a - b);
-  const yearWeights: Record<number, number> = {};
-  for (const y of years) yearWeights[y] = 1;
-
-  return NextResponse.json({ years, yearWeights, teamsByYear, rosterPool });
 }

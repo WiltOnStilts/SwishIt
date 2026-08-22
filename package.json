@@ -10,6 +10,7 @@
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "db:ensure": "tsx scripts/ensure-db.ts",
     "db:expand-players": "tsx scripts/expand-player-db.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio"
