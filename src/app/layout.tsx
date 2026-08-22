@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { Bebas_Neue, Fraunces, Manrope } from "next/font/google";
 import "./globals.css";
 
@@ -33,12 +34,15 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+
   return (
     <html
       lang="en"
       className={`${display.variable} ${body.variable} ${cozy.variable} h-full`}
     >
       <body className="min-h-full flex flex-col antialiased">{children}</body>
+      {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
     </html>
   );
 }
