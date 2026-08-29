@@ -74,6 +74,36 @@ function slotLabel(slot: SlotKey): string {
   return slot === "sixth" ? "6TH" : SLOTS[slot]!;
 }
 
+function SwapBadge() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4 text-zinc-300"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M7 16V4M7 4L3 8M7 4l4 4" />
+      <path d="M17 8v12M17 20l4-4M17 20l-4-4" />
+    </svg>
+  );
+}
+
+function isSwapEligible(
+  pending: LineupPlayer,
+  fromSlot: SlotKey,
+  slot: SlotKey,
+  occupant: LineupPlayer | null,
+): boolean {
+  if (fromSlot === slot || !occupant) return false;
+  if (!isSlotEligibleForPlayer(pending, slot)) return false;
+  if (fromSlot === "sixth") return true;
+  return canPlaySlot(occupant, SLOTS[fromSlot]!);
+}
+
 export default function UndefeatedGame() {
   const router = useRouter();
   const [statsPref, setStatsPref] = useState<boolean | null>(null);
@@ -379,20 +409,19 @@ export default function UndefeatedGame() {
 
     if (pendingPlayer) {
       const fromSlot = slotHoldingPlayer(pendingPlayer);
-      const sittingHere =
-        current &&
-        (fromSlot === slot || samePlayer(current, pendingPlayer));
 
-      if (sittingHere) {
-        const next = writeSlot(starters, sixth, slot, null);
-        setStarters(next.starters);
-        setSixth(next.sixth);
+      if (fromSlot === slot) {
         setPendingPlayer(null);
         return;
       }
 
       if (!isSlotEligibleForPlayer(pendingPlayer, slot)) {
         setError(`Can't play ${pendingPlayer.playerName} at that spot.`);
+        return;
+      }
+
+      if (fromSlot == null && current) {
+        setError("That spot is taken — pick an open position.");
         return;
       }
 
@@ -534,6 +563,18 @@ export default function UndefeatedGame() {
   const highlightSlot = pendingPlayer
     ? slotHoldingPlayer(pendingPlayer)
     : null;
+  const pendingFromSlot = pendingPlayer
+    ? slotHoldingPlayer(pendingPlayer)
+    : null;
+  const sixthLitMove =
+    !!pendingPlayer &&
+    highlightSlot !== "sixth" &&
+    !sixth &&
+    isSlotEligibleForPlayer(pendingPlayer, "sixth");
+  const sixthLitSwap =
+    !!pendingPlayer &&
+    pendingFromSlot != null &&
+    isSwapEligible(pendingPlayer, pendingFromSlot, "sixth", sixth);
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pt-6 safe-bottom">
@@ -624,7 +665,7 @@ export default function UndefeatedGame() {
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
           {pendingPlayer
             ? slotHoldingPlayer(pendingPlayer) != null
-              ? `Move ${pendingPlayer.playerName}: lit = eligible place or swap. Tap their spot to remove.`
+              ? `Move ${pendingPlayer.playerName}: orange = open spot, grey = swap. Tap again to deselect.`
               : `Place ${pendingPlayer.playerName}: tap a lit position`
             : "Tap a player, then a lit position"}
         </p>
@@ -632,23 +673,38 @@ export default function UndefeatedGame() {
           {SLOTS.map((pos, i) => {
             const p = starters[i];
             const isPendingSource = highlightSlot === i;
-            const litTarget =
+            const fromSlot =
+              pendingPlayer != null ? slotHoldingPlayer(pendingPlayer) : null;
+            const litMove =
               !!pendingPlayer &&
               !isPendingSource &&
+              !p &&
               isSlotEligibleForPlayer(pendingPlayer, i);
+            const litSwap =
+              !!pendingPlayer &&
+              fromSlot != null &&
+              !isPendingSource &&
+              isSwapEligible(pendingPlayer, fromSlot, i, p);
             return (
               <button
                 key={pos}
                 type="button"
                 onClick={() => onSlotClick(i)}
-                className={`min-h-[4.5rem] rounded-xl border px-2 py-2 text-left transition ${
+                className={`relative min-h-[4.5rem] rounded-xl border px-2 py-2 text-left transition ${
                   isPendingSource
                     ? "border-[var(--orange)] bg-[var(--orange)]/30 ring-2 ring-[var(--orange)]"
-                    : litTarget
-                      ? "border-[var(--orange)]/70 bg-[var(--orange)]/15 ring-2 ring-[var(--orange)]"
-                      : "border-[var(--line)] bg-[var(--tile)]"
+                    : litSwap
+                      ? "border-zinc-500/70 bg-zinc-500/15 ring-2 ring-zinc-400"
+                      : litMove
+                        ? "border-[var(--orange)]/70 bg-[var(--orange)]/15 ring-2 ring-[var(--orange)]"
+                        : "border-[var(--line)] bg-[var(--tile)]"
                 }`}
               >
+                {litSwap ? (
+                  <span className="absolute right-1.5 top-1.5">
+                    <SwapBadge />
+                  </span>
+                ) : null}
                 <span className="text-[10px] font-bold text-[var(--orange-hot)]">
                   {pos}
                 </span>
@@ -666,14 +722,21 @@ export default function UndefeatedGame() {
           <button
             type="button"
             onClick={() => onSlotClick("sixth")}
-            className={`min-h-[4.5rem] rounded-xl border px-2 py-2 text-left transition ${
+            className={`relative min-h-[4.5rem] rounded-xl border px-2 py-2 text-left transition ${
               highlightSlot === "sixth"
                 ? "border-[var(--orange)] bg-[var(--orange)]/30 ring-2 ring-[var(--orange)]"
-                : pendingPlayer
-                  ? "border-[var(--orange)]/70 bg-[var(--orange)]/15 ring-2 ring-[var(--orange)]"
-                  : "border-[var(--line)] bg-[var(--tile)]"
+                : sixthLitSwap
+                  ? "border-zinc-500/70 bg-zinc-500/15 ring-2 ring-zinc-400"
+                  : sixthLitMove
+                    ? "border-[var(--orange)]/70 bg-[var(--orange)]/15 ring-2 ring-[var(--orange)]"
+                    : "border-[var(--line)] bg-[var(--tile)]"
             }`}
           >
+            {sixthLitSwap ? (
+              <span className="absolute right-1.5 top-1.5">
+                <SwapBadge />
+              </span>
+            ) : null}
             <span className="text-[10px] font-bold text-[var(--orange-hot)]">
               6TH
             </span>
