@@ -267,19 +267,30 @@ export default function SuperstarStudioPage() {
     setError(null);
   };
 
+  const removePendingFromAttributes = () => {
+    if (!pendingPlayer) return;
+    const fromAttr = attrHoldingPlayer(pendingPlayer);
+    if (!fromAttr) return;
+    setPicks((prev) => {
+      const next = { ...prev };
+      delete next[fromAttr];
+      return next;
+    });
+    setPendingPlayer(null);
+    setError(null);
+  };
+
   const onAttrClick = (attr: AttributeKey) => {
     const occupant = picks[attr] ?? null;
 
     if (pendingPlayer) {
       const fromAttr = attrHoldingPlayer(pendingPlayer);
-      // Tap the box they're already on → clear them off.
       if (
         fromAttr === attr &&
         occupant &&
         (occupant.playerName === pendingPlayer.playerName ||
           occupant.id === pendingPlayer.id)
       ) {
-        clearAttr(attr);
         setPendingPlayer(null);
         setError(null);
         return;
@@ -288,19 +299,10 @@ export default function SuperstarStudioPage() {
       return;
     }
 
-    // No selection yet: tapping a filled box picks that player to move/swap.
     if (occupant) {
       setPendingPlayer(occupant);
       setError(null);
     }
-  };
-
-  const clearAttr = (attr: AttributeKey) => {
-    setPicks((prev) => {
-      const next = { ...prev };
-      delete next[attr];
-      return next;
-    });
   };
 
   const goSuperstar = () => {
@@ -325,6 +327,10 @@ export default function SuperstarStudioPage() {
   };
 
   const activeSlot = slots.find((s) => s.id === activeSlotId) ?? null;
+  const pendingFromAttr = pendingPlayer
+    ? attrHoldingPlayer(pendingPlayer)
+    : null;
+  const removeLit = !!pendingPlayer && pendingFromAttr != null;
 
   const usedByName = useMemo(() => {
     const map = new Map<string, AttributeKey>();
@@ -397,49 +403,76 @@ export default function SuperstarStudioPage() {
         </div>
 
         {/* Person figure with attributes */}
-        <div className="w-[138px] shrink-0">
-          <div className="relative mx-auto flex flex-col items-center rounded-[2.5rem] border border-[var(--line)] bg-gradient-to-b from-[#2a1a10] to-[#120d09] px-2 pb-3 pt-3 shadow-[inset_0_0_30px_rgba(249,115,22,0.12)]">
-            <ul className="flex w-full flex-col gap-1">
-              {ATTRIBUTES.map((attr) => {
-                const player = picks[attr];
-                const isPendingSource =
-                  !!pendingPlayer &&
-                  !!player &&
-                  (player.playerName === pendingPlayer.playerName ||
-                    player.id === pendingPlayer.id);
-                const litTarget = !!pendingPlayer && !isPendingSource;
-                return (
-                  <li key={attr}>
-                    <button
-                      type="button"
-                      onClick={() => onAttrClick(attr)}
-                      className={`w-full rounded-lg px-1.5 py-1 text-left transition ${
-                        isPendingSource
-                          ? "bg-[var(--orange)]/30 ring-2 ring-[var(--orange)]"
-                          : litTarget
-                            ? "bg-[var(--orange)]/15 ring-2 ring-[var(--orange)] ring-offset-1 ring-offset-[#1a1008]"
-                            : player
-                              ? "bg-black/35"
-                              : "bg-black/15"
-                      }`}
-                    >
-                      <span className="block text-[9px] font-bold uppercase tracking-wider text-[var(--muted)]">
-                        {ATTRIBUTE_LABELS[attr]}
-                      </span>
-                      <span className="block truncate text-[10px] leading-tight text-[var(--ink)]">
-                        {player ? player.playerName : "—"}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <div className="w-[138px]">
+            <div className="relative mx-auto flex flex-col items-center rounded-[2.5rem] border border-[var(--line)] bg-gradient-to-b from-[#2a1a10] to-[#120d09] px-2 pb-3 pt-3 shadow-[inset_0_0_30px_rgba(249,115,22,0.12)]">
+              <ul className="flex w-full flex-col gap-1">
+                {ATTRIBUTES.map((attr) => {
+                  const player = picks[attr];
+                  const isPendingSource =
+                    !!pendingPlayer &&
+                    !!player &&
+                    (player.playerName === pendingPlayer.playerName ||
+                      player.id === pendingPlayer.id);
+                  const litTarget = !!pendingPlayer && !isPendingSource;
+                  return (
+                    <li key={attr}>
+                      <button
+                        type="button"
+                        onClick={() => onAttrClick(attr)}
+                        className={`w-full rounded-lg px-1.5 py-1 text-left transition ${
+                          isPendingSource
+                            ? "bg-[var(--orange)]/30 ring-2 ring-[var(--orange)]"
+                            : litTarget
+                              ? "bg-[var(--orange)]/15 ring-2 ring-[var(--orange)] ring-offset-1 ring-offset-[#1a1008]"
+                              : player
+                                ? "bg-black/35"
+                                : "bg-black/15"
+                        }`}
+                      >
+                        <span className="block text-[9px] font-bold uppercase tracking-wider text-[var(--muted)]">
+                          {ATTRIBUTE_LABELS[attr]}
+                        </span>
+                        <span className="block truncate text-[10px] leading-tight text-[var(--ink)]">
+                          {player ? player.playerName : "—"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+            <p className="mt-2 text-center text-[10px] leading-snug text-[var(--muted)]">
+              {pendingPlayer
+                ? pendingFromAttr
+                  ? `Move ${pendingPlayer.playerName}: tap a trait, swap, or ✕ to remove. Tap again to deselect.`
+                  : `Place ${pendingPlayer.playerName}: tap a lit trait`
+                : "Tap a player or a filled trait to select"}
+            </p>
           </div>
-          <p className="mt-2 text-center text-[10px] leading-snug text-[var(--muted)]">
-            {pendingPlayer
-              ? `Move ${pendingPlayer.playerName}: lit = place or swap. Tap again to remove.`
-              : "Tap a player or a filled trait to select"}
-          </p>
+          <button
+            type="button"
+            onClick={removePendingFromAttributes}
+            disabled={!removeLit}
+            aria-label="Remove player from attribute"
+            className={`flex h-14 w-11 shrink-0 items-center justify-center rounded-xl border transition active:scale-[0.98] disabled:opacity-25 ${
+              removeLit
+                ? "border-[var(--orange)]/70 bg-[var(--orange)]/15 ring-2 ring-[var(--orange)]"
+                : "border-[var(--line)] bg-black/20"
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className={`h-8 w-8 ${removeLit ? "text-[var(--orange-hot)]" : "text-[var(--muted)]"}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              aria-hidden
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       </div>
 
