@@ -91,6 +91,31 @@ function SwapBadge() {
   );
 }
 
+function RespinBadge({ used }: { used: boolean }) {
+  const color = used ? "text-zinc-500" : "text-emerald-400";
+  return (
+    <span
+      className={`absolute right-2 top-2 flex items-center gap-0.5 ${color}`}
+      aria-label={used ? "Respin used" : "1 respin left for the game"}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-3.5 w-3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M21 12a9 9 0 1 1-2.6-6.3" />
+        <path d="M21 3v6h-6" />
+      </svg>
+      <span className="text-[15px] font-semibold leading-none">1</span>
+    </span>
+  );
+}
+
 function isSwapEligible(
   pending: LineupPlayer,
   fromSlot: SlotKey,
@@ -133,13 +158,16 @@ export default function UndefeatedGame() {
   const recentFranchises = useRef<string[]>([]);
 
   const showStats = statsPref === true;
-  // First spin each pick is free; a second spin needs the game-wide respin.
+  // First spin each pick is free; respins unlock only after both Year and Team are set.
+  const bothSpun = year != null && team != null;
   const canSpinYear =
     !!years.length &&
     !spinning &&
-    (year == null || !yearRespinUsed);
+    (year == null || (bothSpun && !yearRespinUsed));
   const canSpinTeam =
-    year != null && !spinning && (team == null || !teamRespinUsed);
+    year != null &&
+    !spinning &&
+    (team == null || (bothSpun && !teamRespinUsed));
 
   useEffect(() => {
     fetch("/api/undefeated/meta")
@@ -171,6 +199,10 @@ export default function UndefeatedGame() {
   const spinYear = () => {
     if (spinning || !years.length) return;
     const isRespin = year != null;
+    if (isRespin && team == null) {
+      setError("Spin a team first — then you can respin.");
+      return;
+    }
     if (isRespin && yearRespinUsed) {
       setError(
         "Year respin already used — pick a player or spin team if you still can.",
@@ -610,20 +642,9 @@ export default function UndefeatedGame() {
             type="button"
             onClick={spinYear}
             disabled={!canSpinYear}
-            className="relative rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:opacity-40"
+            className="relative rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:cursor-not-allowed"
           >
-            <span
-              className={`absolute right-2.5 top-2 text-[15px] font-semibold ${
-                yearRespinUsed ? "text-zinc-500" : "text-emerald-400"
-              }`}
-              aria-label={
-                yearRespinUsed
-                  ? "Year respin used"
-                  : "1 year respin left for the game"
-              }
-            >
-              1
-            </span>
+            <RespinBadge used={yearRespinUsed} />
             <span className="block text-[10px] uppercase tracking-widest text-[var(--muted)]">
               Year
             </span>
@@ -637,20 +658,9 @@ export default function UndefeatedGame() {
             type="button"
             onClick={spinTeam}
             disabled={!canSpinTeam}
-            className="relative rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:opacity-40"
+            className="relative rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:cursor-not-allowed"
           >
-            <span
-              className={`absolute right-2.5 top-2 text-[15px] font-semibold ${
-                teamRespinUsed ? "text-zinc-500" : "text-emerald-400"
-              }`}
-              aria-label={
-                teamRespinUsed
-                  ? "Team respin used"
-                  : "1 team respin left for the game"
-              }
-            >
-              1
-            </span>
+            <RespinBadge used={teamRespinUsed} />
             <span className="block text-[10px] uppercase tracking-widest text-[var(--muted)]">
               Team
             </span>
