@@ -25,8 +25,7 @@ type RosterOption = { year: number; team: TeamOpt };
 type SlotKey = number | "sixth";
 
 const SLOTS: CourtPos[] = ["PG", "SG", "SF", "PF", "C"];
-/** First spin + one respin per draft pick (resets after you add a player). */
-const MAX_SPINS_PER_PICK = 2;
+/** One year respin and one team respin for the whole game (not per pick). */
 
 function cryptoRandom() {
   const buf = new Uint32Array(1);
@@ -127,17 +126,20 @@ export default function UndefeatedGame() {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [yearSpins, setYearSpins] = useState(0);
-  const [teamSpins, setTeamSpins] = useState(0);
+  const [yearRespinUsed, setYearRespinUsed] = useState(false);
+  const [teamRespinUsed, setTeamRespinUsed] = useState(false);
   const recentYears = useRef<number[]>([]);
   const recentRosters = useRef<string[]>([]);
   const recentFranchises = useRef<string[]>([]);
 
   const showStats = statsPref === true;
+  // First spin each pick is free; a second spin needs the game-wide respin.
   const canSpinYear =
-    !!years.length && !spinning && yearSpins < MAX_SPINS_PER_PICK;
+    !!years.length &&
+    !spinning &&
+    (year == null || !yearRespinUsed);
   const canSpinTeam =
-    year != null && !spinning && teamSpins < MAX_SPINS_PER_PICK;
+    year != null && !spinning && (team == null || !teamRespinUsed);
 
   useEffect(() => {
     fetch("/api/undefeated/meta")
@@ -168,8 +170,11 @@ export default function UndefeatedGame() {
 
   const spinYear = () => {
     if (spinning || !years.length) return;
-    if (yearSpins >= MAX_SPINS_PER_PICK) {
-      setError("No year respins left — pick a player or use your team spin.");
+    const isRespin = year != null;
+    if (isRespin && yearRespinUsed) {
+      setError(
+        "Year respin already used — pick a player or spin team if you still can.",
+      );
       return;
     }
 
@@ -206,7 +211,7 @@ export default function UndefeatedGame() {
     }
 
     setSpinning("year");
-    setYearSpins((n) => n + 1);
+    if (isRespin) setYearRespinUsed(true);
     setPlayers([]);
     setPendingPlayer(null);
     setError(null);
@@ -254,9 +259,10 @@ export default function UndefeatedGame() {
       setError("Spin a year first.");
       return;
     }
-    if (teamSpins >= MAX_SPINS_PER_PICK) {
+    const isRespin = team != null;
+    if (isRespin && teamRespinUsed) {
       setError(
-        "No team respins left — pick from this roster or you're stuck with it.",
+        "Team respin already used — pick from this roster or you're stuck with it.",
       );
       return;
     }
@@ -305,7 +311,7 @@ export default function UndefeatedGame() {
     };
 
     setSpinning("team");
-    setTeamSpins((n) => n + 1);
+    if (isRespin) setTeamRespinUsed(true);
     setPlayers([]);
     setPendingPlayer(null);
     setError(null);
@@ -390,8 +396,6 @@ export default function UndefeatedGame() {
 
   const commitNewPick = () => {
     setPlayers([]);
-    setYearSpins(0);
-    setTeamSpins(0);
     setYear(null);
     setTeam(null);
   };
@@ -598,41 +602,28 @@ export default function UndefeatedGame() {
       </div>
 
       <section className="rounded-2xl border border-[var(--line)] bg-black/25 p-4">
-        <div className="flex items-center justify-center gap-4 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-            tap/click to spin.
-          </p>
-          <p className="font-[family-name:var(--font-body)] text-[13px] font-medium tracking-wide text-[var(--ink)]">
-            Respins left — Year{" "}
-            <span
-              className={
-                yearSpins >= 2
-                  ? "text-[15px] font-semibold text-red-400"
-                  : "text-[15px] font-semibold text-emerald-400"
-              }
-            >
-              {yearSpins >= 2 ? 0 : 1}
-            </span>
-            {"  "}
-            Team{" "}
-            <span
-              className={
-                teamSpins >= 2
-                  ? "text-[15px] font-semibold text-red-400"
-                  : "text-[15px] font-semibold text-emerald-400"
-              }
-            >
-              {teamSpins >= 2 ? 0 : 1}
-            </span>
-          </p>
-        </div>
+        <p className="text-center text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+          tap/click to spin.
+        </p>
         <div className="mt-3 grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={spinYear}
             disabled={!canSpinYear}
-            className="rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:opacity-40"
+            className="relative rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:opacity-40"
           >
+            <span
+              className={`absolute right-2.5 top-2 text-[15px] font-semibold ${
+                yearRespinUsed ? "text-zinc-500" : "text-emerald-400"
+              }`}
+              aria-label={
+                yearRespinUsed
+                  ? "Year respin used"
+                  : "1 year respin left for the game"
+              }
+            >
+              1
+            </span>
             <span className="block text-[10px] uppercase tracking-widest text-[var(--muted)]">
               Year
             </span>
@@ -646,8 +637,20 @@ export default function UndefeatedGame() {
             type="button"
             onClick={spinTeam}
             disabled={!canSpinTeam}
-            className="rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:opacity-40"
+            className="relative rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:opacity-40"
           >
+            <span
+              className={`absolute right-2.5 top-2 text-[15px] font-semibold ${
+                teamRespinUsed ? "text-zinc-500" : "text-emerald-400"
+              }`}
+              aria-label={
+                teamRespinUsed
+                  ? "Team respin used"
+                  : "1 team respin left for the game"
+              }
+            >
+              1
+            </span>
             <span className="block text-[10px] uppercase tracking-widest text-[var(--muted)]">
               Team
             </span>
@@ -817,7 +820,7 @@ export default function UndefeatedGame() {
         firstEmptySlot != null &&
         rosterPlayers.length > 0 && (
           <p className="mt-4 text-sm text-[var(--muted)]">
-            Spin again for the next pick — 1 year respin and 1 team respin each.
+            Spin again for the next pick — one year respin and one team respin for the whole game.
           </p>
         )}
 

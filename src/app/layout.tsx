@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { Bebas_Neue, Fraunces, Manrope } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const display = Bebas_Neue({
@@ -43,6 +44,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col antialiased">{children}</body>
       {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
+      <Script
+        id="adsense-init"
+        async
+        src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6602128015512763"
+        crossOrigin="anonymous"
+        strategy="afterInteractive"
+      />
     </html>
   );
 }
