@@ -165,13 +165,16 @@ export default function UndefeatedGame() {
   const recentFranchises = useRef<string[]>([]);
 
   const showStats = statsPref === true;
+  const lineupFull = starters.every(Boolean) && sixth != null;
   // First spin each pick is free; respins unlock only after both Year and Team are set.
   const bothSpun = year != null && team != null;
   const canSpinYear =
+    !lineupFull &&
     !!years.length &&
     !spinning &&
     (year == null || (bothSpun && !yearRespinUsed));
   const canSpinTeam =
+    !lineupFull &&
     year != null &&
     !spinning &&
     (team == null || (bothSpun && !teamRespinUsed));
@@ -204,7 +207,7 @@ export default function UndefeatedGame() {
   }, []);
 
   const spinYear = () => {
-    if (spinning || !years.length) return;
+    if (lineupFull || spinning || !years.length) return;
     const isRespin = year != null;
     if (isRespin && team == null) {
       setError("Spin a team first — then you can respin.");
@@ -293,7 +296,7 @@ export default function UndefeatedGame() {
   };
 
   const spinTeam = () => {
-    if (spinning) return;
+    if (lineupFull || spinning) return;
     if (year == null) {
       setError("Spin a year first.");
       return;

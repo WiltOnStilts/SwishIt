@@ -174,11 +174,14 @@ export default function UndefeatedResultsPage() {
 
       <section className="mt-5">
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-          Storylines
+          Your season
         </p>
-        <ul className="mt-2 space-y-2">
+        <ul className="mt-3 list-disc space-y-3 pl-5 marker:text-[var(--orange-hot)]">
           {result.storylines.map((s) => (
-            <li key={s} className="text-sm leading-relaxed text-[var(--muted)]">
+            <li
+              key={s}
+              className="font-[family-name:var(--font-cozy)] text-base leading-snug text-[var(--ink)] sm:text-lg"
+            >
               {s}
             </li>
           ))}
