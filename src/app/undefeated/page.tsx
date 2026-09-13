@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   canPlaySlot,
+  playerDefense,
   playerPower,
   UNDEFEATED_RESULT_KEY,
   type CourtPos,
@@ -431,10 +432,19 @@ export default function UndefeatedGame() {
   };
 
   const rosterList = useMemo(() => {
-    return [...players].sort((a, b) =>
-      a.playerName.localeCompare(b.playerName),
-    );
-  }, [players]);
+    const list = [...players];
+    if (showStats) {
+      return list.sort((a, b) => playerPower(b) - playerPower(a));
+    }
+    // No stats: shuffle so you have to know the names.
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = list[i]!;
+      list[i] = list[j]!;
+      list[j] = tmp;
+    }
+    return list;
+  }, [players, showStats]);
 
   const commitNewPick = () => {
     setPlayers([]);
@@ -822,7 +832,8 @@ export default function UndefeatedGame() {
                             {" "}
                             · {p.ppg.toFixed(1)} pts · {p.rpg.toFixed(1)} reb ·{" "}
                             {p.apg.toFixed(1)} ast · impact{" "}
-                            {Math.round(playerPower(p))}
+                            {Math.round(playerPower(p))} · def{" "}
+                            {playerDefense(p)}
                           </>
                         )}
                       </p>

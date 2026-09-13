@@ -63,6 +63,115 @@ export function canPlaySlot(player: LineupPlayer, slot: CourtPos): boolean {
   return player.positions.includes(slot);
 }
 
+function curve(
+  value: number,
+  midpoint: number,
+  steepness: number,
+  floor: number,
+  ceil: number,
+): number {
+  const t = 1 / (1 + Math.exp(-steepness * (value - midpoint)));
+  return floor + t * (ceil - floor);
+}
+
+function per36(stat: number, mpg: number): number {
+  if (mpg <= 0) return stat;
+  return (stat * 36) / mpg;
+}
+
+/**
+ * Defensive impact on the same 42–96 scale as Superstar Studio defense.
+ * Uses STL, BLK, REB, minutes, awards — shared with Undefeated wins + UI.
+ */
+export function playerDefense(p: LineupPlayer): number {
+  const isC = p.positions.includes("C");
+  const isPF = p.positions.includes("PF");
+  const big = isC || isPF;
+  const guard = p.positions.includes("PG") || p.positions.includes("SG");
+  const stl36 = per36(p.spg, p.mpg);
+  const blk36 = per36(p.bpg, p.mpg);
+  const reb36 = per36(p.rpg, p.mpg);
+  const stocks = p.spg + p.bpg;
+  const stocks36 = stl36 + blk36;
+
+  const stealScore =
+    curve(stl36, 1.35, 0.9, 48, 94) * 0.55 +
+    curve(p.spg, 1.15, 0.95, 48, 93) * 0.45;
+  const blockScore =
+    curve(blk36, 1.4, 0.72, 48, 95) * 0.55 +
+    curve(p.bpg, 1.15, 0.78, 48, 94) * 0.45;
+  const boardScore =
+    curve(reb36, 8.2, 0.32, 48, 92) * 0.6 +
+    curve(p.rpg, 7.0, 0.34, 48, 91) * 0.4;
+  const stockScore =
+    curve(stocks36, 2.0, 0.62, 50, 94) * 0.55 +
+    curve(stocks, 1.7, 0.7, 50, 93) * 0.45;
+  const workload = curve(p.mpg, 28, 0.13, 48, 88);
+  const availability = curve(p.games, 65, 0.06, 50, 86);
+
+  let raw: number;
+  if (big) {
+    raw =
+      blockScore * 0.3 +
+      boardScore * 0.26 +
+      stockScore * 0.18 +
+      stealScore * 0.12 +
+      workload * 0.08 +
+      availability * 0.06;
+  } else if (guard) {
+    raw =
+      stealScore * 0.38 +
+      stockScore * 0.22 +
+      workload * 0.14 +
+      boardScore * 0.1 +
+      blockScore * 0.08 +
+      availability * 0.08;
+  } else {
+    raw =
+      stealScore * 0.26 +
+      blockScore * 0.22 +
+      boardScore * 0.2 +
+      stockScore * 0.16 +
+      workload * 0.1 +
+      availability * 0.06;
+  }
+
+  if (p.bpg >= 1.2) raw += 1.5;
+  if (p.bpg >= 2.0) raw += 2.5;
+  if (p.bpg >= 3.0) raw += 2.5;
+  if (p.bpg >= 3.8) raw += 2;
+  if (p.spg >= 1.3) raw += 1.5;
+  if (p.spg >= 1.8) raw += 2;
+  if (p.spg >= 2.3) raw += 2.5;
+  if (p.rpg >= 8 && big) raw += 1.5;
+  if (p.rpg >= 10 && big) raw += 2;
+  if (p.mpg >= 32 && stocks >= 1.5) raw += 1.5;
+
+  const allDef1 = p.accolades.some((a) => /all-defense 1|def1/i.test(a));
+  const allDef2 = p.accolades.some((a) => /all-defense 2|def2/i.test(a));
+  const anyDef = p.accolades.some((a) => /def/i.test(a));
+
+  if (p.dpoy) raw += 12;
+  else if (allDef1) raw += 7;
+  else if (allDef2) raw += 5;
+  else if (anyDef) raw += 3;
+
+  if (p.allStar && stocks >= 1.6) raw += 1.5;
+  if (p.champion && stocks >= 1.4) raw += 1;
+
+  if (stocks >= 2.0) raw = Math.max(raw, 78);
+  if (stocks >= 2.5) raw = Math.max(raw, 82);
+  if (stocks >= 3.2) raw = Math.max(raw, 86);
+  if (stocks36 >= 3.5) raw = Math.max(raw, 84);
+  if (allDef2) raw = Math.max(raw, 84);
+  if (allDef1) raw = Math.max(raw, 88);
+  if (p.dpoy) raw = Math.max(raw, 93);
+  if (big && p.bpg >= 2.5 && p.rpg >= 8) raw = Math.max(raw, 85);
+  if (guard && p.spg >= 2.0) raw = Math.max(raw, 84);
+
+  return Math.round(clamp(raw, 42, 96));
+}
+
 export function playerPower(p: LineupPlayer): number {
   // Defense uses every defensive counting stat we store: STL, BLK, REB + awards.
   const offense = p.ppg * 1.15 + p.apg * 1.05;
@@ -359,6 +468,33 @@ function buildStorylines(
     );
   }
 
+  const avgDef =
+    lineup.reduce((s, p) => s + playerDefense(p), 0) / lineup.length;
+  const byDef = [...lineup].sort(
+    (a, b) => playerDefense(b) - playerDefense(a),
+  );
+  const bestDef = byDef[0]!;
+  const softDef = byDef[byDef.length - 1]!;
+  const defLabel = Math.round(avgDef);
+
+  if (avgDef >= 84) {
+    stories.push(
+      `Elite defensive impact (team ${defLabel}) — ${bestDef.playerName}'s stops (${playerDefense(bestDef)} def) banked extra wins against all-time scorers.`,
+    );
+  } else if (avgDef >= 76) {
+    stories.push(
+      `Solid defensive impact (team ${defLabel}) with ${bestDef.playerName} leading — enough stops to swing toss-up nights.`,
+    );
+  } else if (avgDef < 68) {
+    stories.push(
+      `Soft defensive impact (team ${defLabel}) cost wins — ${softDef.playerName}'s end (${playerDefense(softDef)} def) got hunted by all-time offenses.`,
+    );
+  } else {
+    stories.push(
+      `Middle-of-the-pack defensive impact (team ${defLabel}) — offense had to carry more nights than a lockdown unit would need.`,
+    );
+  }
+
   if (wins >= 65) {
     stories.push(
       `${wins}-${losses} put this squad in historic company — bad nights were rare.`,
@@ -381,10 +517,10 @@ function buildStorylines(
   for (const s of stories) {
     if (!unique.includes(s)) unique.push(s);
   }
-  while (unique.length > 4) {
+  while (unique.length > 5) {
     unique.splice(Math.floor(rand() * (unique.length - 1)) + 1, 1);
   }
-  return unique.slice(0, 4);
+  return unique.slice(0, 5);
 }
 
 export function simulateSeason(
@@ -401,7 +537,13 @@ export function simulateSeason(
     new Set(lineup.map((p) => `${p.year}-${p.teamAbbr}`)).size === 1;
   const chemistry = sameCore ? 3 : 0;
 
-  let rating = starterPower + benchBoost + chemistry;
+  const starterDef =
+    lineup.reduce((s, p) => s + playerDefense(p), 0) / lineup.length;
+  const benchDef = sixthMan ? playerDefense(sixthMan) * 0.18 : 0;
+  // Defense moves the needle: elite units win more, soft ones bleed wins.
+  const defBoost = (starterDef - 72) * 0.45 + (benchDef - 13) * 0.08;
+
+  let rating = starterPower + benchBoost + chemistry + defBoost;
   const top = Math.max(...powers);
   const depth =
     [...powers].sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0) / 3;
