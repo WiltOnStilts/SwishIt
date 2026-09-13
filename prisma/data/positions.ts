@@ -69,7 +69,7 @@ export const EXTRA_POSITIONS: Record<string, CourtPos[]> = {
   "Franz Wagner": ["SF", "SG"],
   "Gary Payton": ["PG", "SG"],
   "Giannis Antetokounmpo": ["PF", "SF", "C"],
-  "Grant Hill": ["SF", "SG", "PF"],
+  "Grant Hill": ["SF", "SG"],
   "Hakeem Olajuwon": ["C", "PF"],
   "Hassan Whiteside": ["C", "PF"],
   "Horace Grant": ["PF", "C"],
@@ -277,41 +277,52 @@ export function resolvePositions(
     if (set.has("PF") || primary === "SF") set.add("SF");
   }
 
-  // Bigs: PF↔C from BRef career dual-listing, extras, and big-primary seasons only.
+  // Bigs: PF↔C for real bigs only. Wing PF extras (Grant Hill, etc.) must not unlock C.
   const careerHasPf = !!career?.has("PF");
   const careerHasC = !!career?.has("C");
   const extras = EXTRA_POSITIONS[season.playerName] ?? [];
-  const listedBig =
-    primary === "PF" ||
-    primary === "C" ||
-    careerHasPf ||
-    careerHasC ||
-    extras.includes("PF") ||
-    extras.includes("C");
 
-  if (listedBig) {
-    if (careerHasPf) set.add("PF");
-    if (careerHasC) set.add("C");
+  if (careerHasPf) set.add("PF");
+  if (careerHasC || extras.includes("C")) set.add("C");
 
-    const rimProtector =
-      season.bpg >= 0.85 ||
-      (season.bpg >= 0.55 && season.rpg >= 7) ||
-      stocks >= 1.6 ||
-      hasDefAccolade;
-    const faceUpBig =
-      season.apg >= 1.8 ||
-      season.ppg >= 14 ||
-      season.spg >= 0.9 ||
-      (season.rpg >= 6 && season.apg >= 1.2);
-    const traditionalBig =
-      mpg >= 18 && (season.rpg >= 6 || season.bpg >= 0.5);
+  const rimProtector =
+    season.bpg >= 0.9 ||
+    (season.bpg >= 0.6 && season.rpg >= 8) ||
+    stocks >= 1.8 ||
+    hasDefAccolade;
+  const faceUpBig =
+    season.apg >= 1.8 ||
+    season.ppg >= 14 ||
+    (season.rpg >= 6 && season.apg >= 1.2);
+  const traditionalBig =
+    mpg >= 18 && (season.rpg >= 7 || season.bpg >= 0.6);
 
-    if (primary === "PF" || extras.includes("PF")) {
-      if (careerHasC || rimProtector || traditionalBig) set.add("C");
+  // PF→C only on PF-primary seasons with real big-man signals — not scoring wings.
+  if (primary === "PF") {
+    if (
+      careerHasC ||
+      extras.includes("C") ||
+      season.bpg >= 1.0 ||
+      (season.rpg >= 10 && season.bpg >= 0.5) ||
+      (season.rpg >= 9 && season.bpg >= 0.8)
+    ) {
+      set.add("C");
     }
-    if (primary === "C" || extras.includes("C")) {
-      if (careerHasPf || faceUpBig || traditionalBig) set.add("PF");
+  }
+  if (primary === "C" || extras.includes("C") || careerHasC) {
+    set.add("C");
+    if (careerHasPf || extras.includes("PF") || faceUpBig || traditionalBig) {
+      set.add("PF");
     }
+  }
+
+  // Safety: perimeter primaries never become centers unless BRef/extras say so.
+  if (
+    (primary === "PG" || primary === "SG" || primary === "SF") &&
+    !careerHasC &&
+    !extras.includes("C")
+  ) {
+    set.delete("C");
   }
 
   return ordered(primary, set);
