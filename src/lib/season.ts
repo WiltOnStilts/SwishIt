@@ -194,14 +194,14 @@ function seriesWinChance(
   roundIndex: number,
 ): number {
   const gap = userRating - oppStrength;
-  // Logistic on strength gap — big favorites win most series.
-  let p = 1 / (1 + Math.exp(-gap / 5.5));
-  // Tiny round tax (travel / fatigue), not a hard ceiling.
-  p -= roundIndex * 0.025;
-  // Favorites get a bump so stacked Undefeated squads keep winning.
+  // Slightly softer curve so modest favorites still win most series.
+  let p = 1 / (1 + Math.exp(-gap / 6.5));
+  // Light round tax — Conf Finals/Finals are harder, not a brick wall.
+  p -= roundIndex * 0.015;
+  if (gap >= 0) p += 0.05;
   if (gap >= 4) p += 0.06;
-  if (gap >= 10) p += 0.08;
-  return clamp(p, 0.22, 0.94);
+  if (gap >= 10) p += 0.06;
+  return clamp(p, 0.28, 0.95);
 }
 
 function seriesScore(
@@ -209,16 +209,43 @@ function seriesScore(
   powerDiff: number,
   rand: () => number,
 ): string {
+  const roll = rand();
   if (won) {
-    if (powerDiff >= 12) return rand() < 0.55 ? "4-0" : "4-1";
-    if (powerDiff >= 6) return rand() < 0.4 ? "4-0" : rand() < 0.65 ? "4-1" : "4-2";
-    if (powerDiff >= 0) return rand() < 0.35 ? "4-1" : "4-2";
-    return rand() < 0.25 ? "4-1" : "4-2"; // mild upset win
+    // Close matchups go the distance often (Game 7 / 4-2).
+    if (Math.abs(powerDiff) <= 5) {
+      if (roll < 0.42) return "4-3";
+      if (roll < 0.75) return "4-2";
+      if (roll < 0.92) return "4-1";
+      return "4-0";
+    }
+    if (powerDiff >= 12) {
+      if (roll < 0.12) return "4-3";
+      if (roll < 0.32) return "4-2";
+      if (roll < 0.68) return "4-1";
+      return "4-0";
+    }
+    if (roll < 0.28) return "4-3";
+    if (roll < 0.58) return "4-2";
+    if (roll < 0.85) return "4-1";
+    return "4-0";
   }
-  // Losses: closer when the favorite somehow drops it; blowouts when outmatched.
-  if (powerDiff <= -10) return rand() < 0.5 ? "0-4" : "1-4";
-  if (powerDiff <= -3) return rand() < 0.4 ? "1-4" : "2-4";
-  return rand() < 0.45 ? "2-4" : "1-4";
+
+  // Losses: favorites who get upset usually push it to 6–7; big underdogs get swept more.
+  if (powerDiff >= 0) {
+    if (roll < 0.5) return "3-4";
+    if (roll < 0.82) return "2-4";
+    return "1-4";
+  }
+  if (powerDiff <= -10) {
+    if (roll < 0.12) return "3-4";
+    if (roll < 0.38) return "2-4";
+    if (roll < 0.7) return "1-4";
+    return "0-4";
+  }
+  if (roll < 0.35) return "3-4";
+  if (roll < 0.7) return "2-4";
+  if (roll < 0.9) return "1-4";
+  return "0-4";
 }
 
 function simulatePlayoffs(
@@ -265,8 +292,9 @@ function simulatePlayoffs(
   for (let i = 0; i < rounds.length; i++) {
     const opp = opponents[i]!;
     let chance = seriesWinChance(rating, opp.strength, i);
-    if (wins >= 65) chance = Math.min(0.95, chance + 0.08);
-    else if (wins >= 55) chance = Math.min(0.93, chance + 0.04);
+    if (wins >= 65) chance = Math.min(0.96, chance + 0.1);
+    else if (wins >= 55) chance = Math.min(0.94, chance + 0.06);
+    else if (wins >= 48) chance = Math.min(0.92, chance + 0.03);
 
     const won = rand() < chance;
     const powerDiff = rating - opp.strength;
