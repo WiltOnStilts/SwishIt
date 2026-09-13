@@ -64,23 +64,28 @@ export function canPlaySlot(player: LineupPlayer, slot: CourtPos): boolean {
 }
 
 export function playerPower(p: LineupPlayer): number {
-  const counting =
-    p.ppg * 1.15 +
-    p.rpg * 0.85 +
-    p.apg * 1.05 +
-    p.spg * 2.2 +
-    p.bpg * 2.0 +
-    p.mpg * 0.12;
+  // Defense uses every defensive counting stat we store: STL, BLK, REB + awards.
+  const offense = p.ppg * 1.15 + p.apg * 1.05;
+  const boards = p.rpg * 1.05;
+  const defense =
+    p.spg * 3.1 +
+    p.bpg * 2.9 +
+    p.rpg * 0.35 +
+    (p.spg + p.bpg) * 0.6;
+  const workload = p.mpg * 0.12;
 
   let bonus = 0;
   if (p.mvp) bonus += 18;
-  if (p.dpoy) bonus += 10;
+  if (p.dpoy) bonus += 14;
+  if (p.accolades.some((a) => /all-defense 1|def1/i.test(a))) bonus += 8;
+  else if (p.accolades.some((a) => /all-defense 2|def2/i.test(a))) bonus += 5;
+  else if (p.accolades.some((a) => /def/i.test(a))) bonus += 3;
   if (p.allStar) bonus += 6;
   if (p.champion) bonus += 4;
   bonus += Math.min(8, p.accolades.length * 2);
 
   const availability = clamp(p.games / 82, 0.35, 1);
-  return counting * availability + bonus;
+  return (offense + boards + defense + workload) * availability + bonus;
 }
 
 function hashSeed(input: string): number {
@@ -101,43 +106,49 @@ function mulberry32(seed: number) {
   };
 }
 
-const ALL_TIME_TEAMS = [
-  "1996 Bulls",
-  "2017 Warriors",
-  "1986 Celtics",
-  "2001 Lakers",
-  "2014 Spurs",
-  "1983 76ers",
-  "2008 Celtics",
-  "2012 Heat",
-  "1999 Spurs",
-  "2022 Warriors",
-  "1989 Pistons",
-  "2004 Pistons",
-  "2011 Mavericks",
-  "2023 Nuggets",
-  "1987 Lakers",
-  "2016 Cavaliers",
-  "2000 Lakers",
-  "1994 Rockets",
-  "2019 Raptors",
-  "2024 Celtics",
-  "2006 Heat",
-  "1992 Bulls",
-  "2015 Warriors",
-  "1985 Lakers",
-  "2005 Spurs",
-  "1997 Jazz",
-  "2013 Heat",
-  "2020 Lakers",
-  "1993 Suns",
-  "2009 Lakers",
-  "2018 Rockets",
-  "1991 Bulls",
-  "2025 Thunder",
-  "1988 Pistons",
-  "2010 Lakers",
-  "2002 Lakers",
+/**
+ * All-time playoff opponents with strength on the same scale as Undefeated team rating.
+ * Higher = harder. Calibrated so mid-tier champs (e.g. 1994 Rockets) sit below
+ * three-peat Lakers / dynasties — beating a stronger team implies an easier matchup
+ * against a weaker one next round.
+ */
+const ALL_TIME_TEAMS: { name: string; strength: number }[] = [
+  { name: "1996 Bulls", strength: 78 },
+  { name: "2017 Warriors", strength: 77 },
+  { name: "1986 Celtics", strength: 74 },
+  { name: "1987 Lakers", strength: 73 },
+  { name: "2001 Lakers", strength: 72 },
+  { name: "2015 Warriors", strength: 71 },
+  { name: "2014 Spurs", strength: 70 },
+  { name: "1983 76ers", strength: 69 },
+  { name: "2008 Celtics", strength: 69 },
+  { name: "2012 Heat", strength: 68 },
+  { name: "2002 Lakers", strength: 67 },
+  { name: "1992 Bulls", strength: 67 },
+  { name: "2024 Celtics", strength: 66 },
+  { name: "1985 Lakers", strength: 66 },
+  { name: "2016 Cavaliers", strength: 65 },
+  { name: "2000 Lakers", strength: 65 },
+  { name: "1991 Bulls", strength: 65 },
+  { name: "2013 Heat", strength: 64 },
+  { name: "2025 Thunder", strength: 64 },
+  { name: "1989 Pistons", strength: 63 },
+  { name: "2005 Spurs", strength: 63 },
+  { name: "2023 Nuggets", strength: 62 },
+  { name: "1999 Spurs", strength: 62 },
+  { name: "2022 Warriors", strength: 61 },
+  { name: "2009 Lakers", strength: 61 },
+  { name: "2010 Lakers", strength: 60 },
+  { name: "1988 Pistons", strength: 60 },
+  { name: "2019 Raptors", strength: 59 },
+  { name: "2006 Heat", strength: 59 },
+  { name: "2020 Lakers", strength: 58 },
+  { name: "1997 Jazz", strength: 58 },
+  { name: "1994 Rockets", strength: 57 },
+  { name: "2011 Mavericks", strength: 56 },
+  { name: "2004 Pistons", strength: 56 },
+  { name: "2018 Rockets", strength: 55 },
+  { name: "1993 Suns", strength: 54 },
 ];
 
 function impactLabel(p: LineupPlayer): string {
@@ -152,23 +163,62 @@ function impactLabel(p: LineupPlayer): string {
   return traits[0]?.text ?? "two-way presence";
 }
 
-function pickUniqueOpponents(rand: () => number, count: number): string[] {
-  const pool = [...ALL_TIME_TEAMS];
-  const out: string[] = [];
-  while (out.length < count && pool.length) {
-    const i = Math.floor(rand() * pool.length);
-    out.push(pool.splice(i, 1)[0]!);
-  }
-  return out;
+function pickFromBand(
+  pool: { name: string; strength: number }[],
+  rand: () => number,
+  minS: number,
+  maxS: number,
+): { name: string; strength: number } {
+  const band = pool.filter((t) => t.strength >= minS && t.strength <= maxS);
+  const source = band.length ? band : pool;
+  const i = Math.floor(rand() * source.length);
+  return source.splice(i, 1)[0]!;
 }
 
-function seriesScore(won: boolean, rand: () => number): string {
+/** Earlier rounds draw weaker champs; Finals draw the heavyweights. */
+function pickPlayoffOpponents(
+  rand: () => number,
+): { name: string; strength: number }[] {
+  const pool = [...ALL_TIME_TEAMS];
+  return [
+    pickFromBand(pool, rand, 54, 62), // First Round
+    pickFromBand(pool, rand, 58, 68), // Conf Semis
+    pickFromBand(pool, rand, 62, 72), // Conf Finals
+    pickFromBand(pool, rand, 66, 78), // NBA Finals
+  ];
+}
+
+function seriesWinChance(
+  userRating: number,
+  oppStrength: number,
+  roundIndex: number,
+): number {
+  const gap = userRating - oppStrength;
+  // Logistic on strength gap — big favorites win most series.
+  let p = 1 / (1 + Math.exp(-gap / 5.5));
+  // Tiny round tax (travel / fatigue), not a hard ceiling.
+  p -= roundIndex * 0.025;
+  // Favorites get a bump so stacked Undefeated squads keep winning.
+  if (gap >= 4) p += 0.06;
+  if (gap >= 10) p += 0.08;
+  return clamp(p, 0.22, 0.94);
+}
+
+function seriesScore(
+  won: boolean,
+  powerDiff: number,
+  rand: () => number,
+): string {
   if (won) {
-    const losses = Math.floor(rand() * 3); // 4-0, 4-1, 4-2
-    return `4-${losses}`;
+    if (powerDiff >= 12) return rand() < 0.55 ? "4-0" : "4-1";
+    if (powerDiff >= 6) return rand() < 0.4 ? "4-0" : rand() < 0.65 ? "4-1" : "4-2";
+    if (powerDiff >= 0) return rand() < 0.35 ? "4-1" : "4-2";
+    return rand() < 0.25 ? "4-1" : "4-2"; // mild upset win
   }
-  const wins = Math.floor(rand() * 3); // 0-4 .. 2-4
-  return `${wins}-4`;
+  // Losses: closer when the favorite somehow drops it; blowouts when outmatched.
+  if (powerDiff <= -10) return rand() < 0.5 ? "0-4" : "1-4";
+  if (powerDiff <= -3) return rand() < 0.4 ? "1-4" : "2-4";
+  return rand() < 0.45 ? "2-4" : "1-4";
 }
 
 function simulatePlayoffs(
@@ -180,7 +230,7 @@ function simulatePlayoffs(
   playoffRounds: PlayoffRoundResult[];
   champion: boolean;
 } {
-  const madePlayoffs = wins >= 40;
+  const madePlayoffs = wins >= 38;
   if (!madePlayoffs) {
     return { madePlayoffs: false, playoffRounds: [], champion: false };
   }
@@ -192,64 +242,42 @@ function simulatePlayoffs(
     "NBA Finals",
   ];
 
-  // How deep can they go based on regular-season wins / rating
-  let maxRoundIndex = 0;
-  if (wins >= 48 || rating >= 48) maxRoundIndex = 1;
-  if (wins >= 54 || rating >= 55) maxRoundIndex = 2;
-  if (wins >= 58 || rating >= 62) maxRoundIndex = 3;
-  if (wins >= 65 || rating >= 70) maxRoundIndex = 3;
+  const opponents = pickPlayoffOpponents(rand);
 
-  // Chance to win each series — drops as rounds get harder
-  const winChance = [
-    clamp(0.35 + (wins - 40) * 0.015 + (rating - 40) * 0.008, 0.28, 0.88),
-    clamp(0.28 + (wins - 45) * 0.012 + (rating - 45) * 0.007, 0.22, 0.78),
-    clamp(0.22 + (wins - 52) * 0.01 + (rating - 52) * 0.006, 0.16, 0.68),
-    clamp(0.18 + (wins - 58) * 0.01 + (rating - 58) * 0.006, 0.12, 0.62),
-  ];
-
-  // Perfect / near-perfect seasons punch above
-  if (wins >= 72) {
-    for (let i = 0; i < winChance.length; i++) winChance[i] = Math.min(0.92, winChance[i]! + 0.12);
-    maxRoundIndex = 3;
-  }
+  // 82-0: auto-title run against the gauntlet.
   if (wins === 82) {
     return {
       madePlayoffs: true,
-      playoffRounds: pickUniqueOpponents(rand, 4).map((opponent, i) => ({
+      playoffRounds: opponents.map((opp, i) => ({
         round: rounds[i]!,
-        opponent,
+        opponent: opp.name,
         won: true,
-        series: seriesScore(true, rand),
+        series: seriesScore(true, rating - opp.strength + 8, rand),
       })),
       champion: true,
     };
   }
 
-  const opponents = pickUniqueOpponents(rand, 4);
   const playoffRounds: PlayoffRoundResult[] = [];
   let champion = false;
 
-  for (let i = 0; i <= maxRoundIndex; i++) {
-    const won = rand() < winChance[i]!;
+  // Always continue to the next round after a win — Conf Finals winners reach the Finals.
+  for (let i = 0; i < rounds.length; i++) {
+    const opp = opponents[i]!;
+    let chance = seriesWinChance(rating, opp.strength, i);
+    if (wins >= 65) chance = Math.min(0.95, chance + 0.08);
+    else if (wins >= 55) chance = Math.min(0.93, chance + 0.04);
+
+    const won = rand() < chance;
+    const powerDiff = rating - opp.strength;
     playoffRounds.push({
       round: rounds[i]!,
-      opponent: opponents[i]!,
+      opponent: opp.name,
       won,
-      series: seriesScore(won, rand),
+      series: seriesScore(won, powerDiff, rand),
     });
     if (!won) break;
-    if (i === 3) champion = true;
-  }
-
-  // Contenders who cleared maxRoundIndex check might still get upset earlier — already handled.
-  // Give elite records a second chance only if they somehow got no rounds (shouldn't happen).
-  if (playoffRounds.length === 0) {
-    playoffRounds.push({
-      round: "First Round",
-      opponent: opponents[0]!,
-      won: false,
-      series: seriesScore(false, rand),
-    });
+    if (i === rounds.length - 1) champion = true;
   }
 
   return { madePlayoffs: true, playoffRounds, champion };
@@ -301,11 +329,11 @@ function buildStorylines(
   if (teamYears.size === 1) {
     const p0 = lineup[0]!;
     stories.push(
-      `Keeping the ${p0.year} ${p0.teamAbbr} core intact paid off — timing and habits from a real season showed up in January and again in April.`,
+      `All five starters come from the same real team-season (${p0.year} ${p0.teamAbbr}) — shared habits and spacing from that year showed up all spring.`,
     );
   } else if (teamYears.size >= 4) {
     stories.push(
-      `Four different team-seasons in the starting five meant talent without shorthand — a few baffling losses to lesser all-time names followed.`,
+      `Your starters span ${teamYears.size} different real team-seasons (a year + franchise, like 2016 GSW). Mix-and-match lineups are the point of Undefeated — chemistry is optional, talent still travels.`,
     );
   }
 
@@ -352,8 +380,10 @@ export function simulateSeason(
   const starterPower =
     lineup.reduce((s, p) => s + playerPower(p), 0) / lineup.length;
   const benchBoost = sixthMan ? playerPower(sixthMan) * 0.22 : 0;
-  const chemistry =
-    new Set(lineup.map((p) => `${p.year}-${p.teamAbbr}`)).size === 1 ? 4 : -2;
+  // Same real team-season is a small bonus only — mixed all-time fives are not punished.
+  const sameCore =
+    new Set(lineup.map((p) => `${p.year}-${p.teamAbbr}`)).size === 1;
+  const chemistry = sameCore ? 3 : 0;
 
   let rating = starterPower + benchBoost + chemistry;
   const top = Math.max(...powers);
@@ -364,14 +394,15 @@ export function simulateSeason(
   const seed = hashSeed(roster.map((p) => p.id).join("|"));
   const rand = mulberry32(seed);
 
+  // Higher baseline so stacked Undefeated squads win more games vs all-time competition.
   let expectedWins = clamp(
-    22 + (rating - 28) * 1.05 + (rand() - 0.5) * 6,
-    18,
+    30 + (rating - 28) * 1.2 + (rand() - 0.5) * 5,
+    24,
     78,
   );
   // Tiny chance at historic perfection for absurdly stacked squads
-  if (rating >= 78 && rand() > 0.92) expectedWins = 82;
-  else if (rating >= 72 && rand() > 0.97) expectedWins = 82;
+  if (rating >= 74 && rand() > 0.88) expectedWins = 82;
+  else if (rating >= 68 && rand() > 0.95) expectedWins = 82;
 
   const wins = Math.round(expectedWins);
   const losses = 82 - wins;
@@ -383,13 +414,23 @@ export function simulateSeason(
   if (wins >= 60) seedHint = "1–2 seed territory";
   else if (wins >= 53) seedHint = "Top-4 seed";
   else if (wins >= 45) seedHint = "Mid playoff seed";
-  else if (wins >= 40) seedHint = "Play-in / low seed";
-  else if (wins >= 38) seedHint = "Play-in band";
+  else if (wins >= 38) seedHint = "Play-in / low seed";
+  else if (wins >= 35) seedHint = "Play-in band";
 
   let comparison = "Fringe contender";
   if (playoffs.champion) comparison = "Champions";
-  else if (wins >= 65) comparison = "Historically great — Dynasty conversation";
-  else if (wins >= 58) comparison = "Conference finals ceiling";
+  else if (
+    playoffs.playoffRounds.some((r) => r.round === "NBA Finals")
+  ) {
+    comparison = "Finals appearance";
+  } else if (wins >= 65) comparison = "Historically great — Dynasty conversation";
+  else if (
+    playoffs.playoffRounds.some(
+      (r) => r.round === "Conference Finals",
+    )
+  ) {
+    comparison = "Conference finals ceiling";
+  } else if (wins >= 58) comparison = "Conference finals ceiling";
   else if (wins >= 50) comparison = "Serious second-round club";
   else if (wins >= 42) comparison = "First-round live dog";
   else if (wins >= 35) comparison = "Play-in survivor profile";

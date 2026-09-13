@@ -6,7 +6,7 @@ import { players } from "./data/players";
 import { coaches } from "./data/coaches";
 import { puzzles } from "./data/puzzles";
 import { teams } from "./data/teams";
-import { EXTRA_POSITIONS } from "./data/positions";
+import { buildCareerPositions, resolvePositions } from "./data/positions";
 
 const url = resolveSqliteUrl(process.env.DATABASE_URL);
 const adapter = new PrismaBetterSqlite3({ url });
@@ -26,6 +26,7 @@ async function main() {
   }
 
   const missingTeams = new Set<string>();
+  const careerPositions = buildCareerPositions(players);
   const rows = [];
   for (const p of players) {
     const teamId = teamMap.get(p.teamAbbr);
@@ -33,8 +34,7 @@ async function main() {
       missingTeams.add(p.teamAbbr);
       continue;
     }
-    const extras = EXTRA_POSITIONS[p.playerName] ?? [];
-    const positions = [p.position, ...extras.filter((x) => x !== p.position)];
+    const positions = resolvePositions(p, careerPositions.get(p.playerName));
     rows.push({
       playerName: p.playerName,
       year: p.year,

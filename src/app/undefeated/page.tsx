@@ -91,12 +91,19 @@ function SwapBadge() {
   );
 }
 
-function RespinBadge({ used }: { used: boolean }) {
-  const color = used ? "text-zinc-500" : "text-emerald-400";
+function RespinBadge({ available, used }: { available: boolean; used: boolean }) {
+  // Grey while locked (need both Year+Team) or already spent; green only when usable.
+  const color = used || !available ? "text-zinc-500" : "text-emerald-400";
   return (
     <span
       className={`absolute right-2 top-2 flex items-center gap-0.5 ${color}`}
-      aria-label={used ? "Respin used" : "1 respin left for the game"}
+      aria-label={
+        used
+          ? "Respin used"
+          : available
+            ? "1 respin left for the game"
+            : "Respin locked until Year and Team are both spun"
+      }
     >
       <svg
         viewBox="0 0 24 24"
@@ -644,7 +651,10 @@ export default function UndefeatedGame() {
             disabled={!canSpinYear}
             className="relative rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:cursor-not-allowed"
           >
-            <RespinBadge used={yearRespinUsed} />
+            <RespinBadge
+              available={bothSpun && !yearRespinUsed}
+              used={yearRespinUsed}
+            />
             <span className="block text-[10px] uppercase tracking-widest text-[var(--muted)]">
               Year
             </span>
@@ -660,7 +670,10 @@ export default function UndefeatedGame() {
             disabled={!canSpinTeam}
             className="relative rounded-xl border border-[var(--line)] bg-[var(--tile)] px-3 py-4 text-left active:scale-[0.98] disabled:cursor-not-allowed"
           >
-            <RespinBadge used={teamRespinUsed} />
+            <RespinBadge
+              available={bothSpun && !teamRespinUsed}
+              used={teamRespinUsed}
+            />
             <span className="block text-[10px] uppercase tracking-widest text-[var(--muted)]">
               Team
             </span>
