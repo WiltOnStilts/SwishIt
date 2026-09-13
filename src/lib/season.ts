@@ -345,47 +345,35 @@ function buildStorylines(
   if (mvps.length) {
     const names = mvps.map((p) => `${p.playerName} (${p.year})`).join(" & ");
     stories.push(
-      `${names} carried MVP-level gravity from their selected season(s), lifting the ceiling in big spots.`,
+      `${names} brought MVP-level gravity — the kind that opens the floor for everyone else.`,
     );
   } else if (ace && ace.ppg >= 27) {
     stories.push(
-      `${ace.playerName}'s ${ace.year} scoring (${ace.ppg.toFixed(1)} PPG) was the offense's cheat code — until trap-heavy all-time defenses forced someone else to beat them.`,
-    );
-  }
-
-  const teamYears = new Set(lineup.map((p) => `${p.year}-${p.teamAbbr}`));
-  if (teamYears.size === 1) {
-    const p0 = lineup[0]!;
-    stories.push(
-      `All five starters come from the same real team-season (${p0.year} ${p0.teamAbbr}) — shared habits and spacing from that year showed up all spring.`,
-    );
-  } else if (teamYears.size >= 4) {
-    stories.push(
-      `Your starters span ${teamYears.size} different real team-seasons (a year + franchise, like 2016 GSW). Mix-and-match lineups are the point of Undefeated — chemistry is optional, talent still travels.`,
+      `${ace.playerName}'s ${ace.year} scoring (${ace.ppg.toFixed(1)} PPG) was the cheat code — defenses had to pick their poison.`,
     );
   }
 
   if (weak && playerPower(weak) < 32 && ace && playerPower(ace) >= 50) {
     stories.push(
-      `${weak.playerName}'s ${weak.year} line was the soft spot. All-time teams hunted that matchup.`,
+      `${weak.playerName}'s ${weak.year} form was the soft spot all-time teams tried to hunt.`,
     );
   }
 
   if (wins >= 65) {
     stories.push(
-      `${wins}-${losses} put them in historic company. Bad losses were rare.`,
+      `${wins}-${losses} put this squad in historic company — bad nights were rare.`,
     );
   } else if (wins >= 50) {
     stories.push(
-      `A ${wins}-${losses} campaign made them a clear playoff problem on any given night.`,
+      `${wins}-${losses} made them a real problem in April — win or go home energy every night.`,
     );
   } else if (wins >= 40) {
     stories.push(
-      `${wins}-${losses} was a bubble/playoff-edge grind — flashes of dominance, then cold stretches.`,
+      `${wins}-${losses} was a playoff-edge grind with flashes of real dominance.`,
     );
   } else {
     stories.push(
-      `${wins}-${losses} was a grind. The selected season forms didn't hold up over 82 against all-time competition.`,
+      `${wins}-${losses} was a tough go — the all-time schedule never let up.`,
     );
   }
 
@@ -408,7 +396,7 @@ export function simulateSeason(
   const starterPower =
     lineup.reduce((s, p) => s + playerPower(p), 0) / lineup.length;
   const benchBoost = sixthMan ? playerPower(sixthMan) * 0.22 : 0;
-  // Same real team-season is a small bonus only — mixed all-time fives are not punished.
+  // Same real team-season is a small hidden bonus — never shown in storylines.
   const sameCore =
     new Set(lineup.map((p) => `${p.year}-${p.teamAbbr}`)).size === 1;
   const chemistry = sameCore ? 3 : 0;
