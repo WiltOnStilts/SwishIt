@@ -26,6 +26,9 @@ export const metadata: Metadata = {
   title: "SwishIt — Basketball Minigames",
   description:
     "Mobile-first basketball minigames: Undefeated all-time lineups and Detective daily NBA connections.",
+  verification: {
+    google: "VINL0ey_H5eW7kcCfmRzVscaNmCQ9fgCdd13aQzC57w",
+  },
 };
 
 export const viewport: Viewport = {
