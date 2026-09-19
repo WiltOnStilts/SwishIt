@@ -1,15 +1,14 @@
 # Bundled SQLite seed is copied to /tmp on boot (Render FS is often read-only).
-# Do NOT set NODE_ENV=production in envVars here — that makes `npm ci` skip
-# TypeScript/prisma (devDependencies) and the build exits with status 1.
-# Render sets NODE_ENV for the running service automatically.
-# NPM_CONFIG_PRODUCTION=false forces a full install even if NODE_ENV is set in the dashboard.
+# Do NOT set NODE_ENV=production in the dashboard — it makes npm skip install tools.
+# Existing Render services often ignore Blueprint YAML updates: paste buildCommand
+# into Settings → Build & Deploy → Build Command, then Clear build cache & deploy.
 
 services:
   - type: web
     name: swishit
     runtime: node
     plan: free
-    buildCommand: NPM_CONFIG_PRODUCTION=false npm ci && npx prisma generate && npm run build
+    buildCommand: npm install --include=dev && npx prisma generate && npx next build
     startCommand: node -e "require('fs').copyFileSync('prisma/data/swishit.sqlite','/tmp/swishit.db')" && npx next start --hostname 0.0.0.0 --port $PORT
     envVars:
       - key: NODE_VERSION
