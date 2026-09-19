@@ -1,8 +1,0 @@
-# Allow all crawlers — empty Disallow means nothing is blocked.
-User-agent: *
-Disallow:
-
-User-agent: Googlebot
-Disallow:
-
-Sitemap: https://swishit.onrender.com/sitemap.xml
