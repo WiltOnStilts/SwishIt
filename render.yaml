@@ -1,14 +1,19 @@
-# Bundled SQLite seed is copied to /tmp on boot (Render FS is often read-only).
-# Do NOT set NODE_ENV=production in the dashboard — it makes npm skip install tools.
-# Existing Render services often ignore Blueprint YAML updates: paste buildCommand
-# into Settings → Build & Deploy → Build Command, then Clear build cache & deploy.
+# Bundled SQLite is copied to /tmp on boot (Render FS is often read-only).
+#
+# IMPORTANT: Existing Render services often IGNORE Blueprint updates.
+# Paste this Build Command into Settings → Build & Deploy, then
+# Clear build cache & deploy:
+#   npm install --include=dev && npm run build
+#
+# Do NOT set NODE_ENV in the dashboard. Do NOT keep an old command that
+# runs `npm run db:seed` unless you have this commit (seed skips on Render).
 
 services:
   - type: web
     name: swishit
     runtime: node
     plan: free
-    buildCommand: npm install --include=dev && npx prisma generate && npx next build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: node -e "require('fs').copyFileSync('prisma/data/swishit.sqlite','/tmp/swishit.db')" && npx next start --hostname 0.0.0.0 --port $PORT
     envVars:
       - key: NODE_VERSION
