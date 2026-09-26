@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { AdSense } from "@/components/adsense";
 import { readStreak } from "@/lib/detective";
 
 function StreakBadge({ count }: { count: number }) {
@@ -101,16 +102,59 @@ export default function HomePage() {
           </Link>
         </div>
 
+        <section className="mt-10 space-y-5 rounded-2xl border border-[var(--line)] bg-black/25 p-5 text-left">
+          <h2 className="font-[family-name:var(--font-display)] text-3xl tracking-wide text-[var(--orange-hot)]">
+            How SwishIt works
+          </h2>
+          <p className="text-sm leading-relaxed text-[var(--muted)]">
+            SwishIt is a free site of original basketball minigames built around
+            real NBA seasons, not a scoreboard with ads pasted on it. Each game
+            has written rules, scoring, and a recap so you can play, then read
+            how the result was built.
+          </p>
+          <div className="space-y-4 text-sm leading-relaxed text-[var(--ink)]/90">
+            <div>
+              <h3 className="font-bold text-[var(--ink)]">Undefeated</h3>
+              <p className="mt-1 text-[var(--muted)]">
+                Spin a historical year and franchise, then fill a starting five
+                plus a sixth man from that roster. SwishIt simulates an 82-game
+                season against all-time competition and writes storylines from
+                the lineup&apos;s offense, defense, and availability — not a
+                random win generator.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-bold text-[var(--ink)]">Detective</h3>
+              <p className="mt-1 text-[var(--muted)]">
+                A daily Connections-style board of players and coaches. Group
+                four names that share a real basketball link. You get a handful
+                of misses, an optional hint, and a score out of 99 from time,
+                accuracy, and difficulty. A new puzzle posts at midnight ET.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-bold text-[var(--ink)]">Superstar Studio</h3>
+              <p className="mt-1 text-[var(--muted)]">
+                Build a custom star across seven attributes, then see where that
+                player would rank against real seasons. The lab scores the build
+                and runs a career so the result is a write-up, not just a
+                number.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <p
-          className="mt-auto pt-12 text-center font-[family-name:var(--font-cozy)] text-3xl italic leading-snug text-[var(--orange-hot)] sm:text-4xl"
+          className="mt-10 text-center font-[family-name:var(--font-cozy)] text-3xl italic leading-snug text-[var(--orange-hot)] sm:text-4xl"
           style={{ fontVariationSettings: '"SOFT" 80, "WONK" 1' }}
         >
           New minigames coming out soon!
         </p>
         <p className="mt-4 pb-2 text-center text-[11px] uppercase tracking-[0.25em] text-[var(--muted)]/70">
-          Prototype · Ready for Render
+          Free basketball minigames · swishit.onrender.com
         </p>
       </div>
+      <AdSense />
     </main>
   );
 }
