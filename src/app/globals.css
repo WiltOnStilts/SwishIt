@@ -101,6 +101,24 @@ body {
   animation: pulse-glow 2.4s ease-out infinite;
 }
 
+@keyframes info-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 10px rgba(249, 115, 22, 0.7),
+      0 0 18px rgba(249, 115, 22, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(251, 146, 60, 1),
+      0 0 32px rgba(249, 115, 22, 0.75);
+  }
+}
+
+.info-glow {
+  animation: info-glow 1.6s ease-in-out infinite;
+}
+
 .spin-reel {
   animation: reel 0.45s linear infinite;
 }

@@ -102,47 +102,33 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <section className="mt-10 space-y-5 rounded-2xl border border-[var(--line)] bg-black/25 p-5 text-left">
-          <h2 className="font-[family-name:var(--font-display)] text-3xl tracking-wide text-[var(--orange-hot)]">
-            How SwishIt works
-          </h2>
-          <p className="text-sm leading-relaxed text-[var(--muted)]">
-            SwishIt is a free site of original basketball minigames built around
-            real NBA seasons, not a scoreboard with ads pasted on it. Each game
-            has written rules, scoring, and a recap so you can play, then read
-            how the result was built.
-          </p>
-          <div className="space-y-4 text-sm leading-relaxed text-[var(--ink)]/90">
-            <div>
-              <h3 className="font-bold text-[var(--ink)]">Undefeated</h3>
-              <p className="mt-1 text-[var(--muted)]">
-                Spin a historical year and franchise, then fill a starting five
-                plus a sixth man from that roster. SwishIt simulates an 82-game
-                season against all-time competition and writes storylines from
-                the lineup&apos;s offense, defense, and availability — not a
-                random win generator.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-bold text-[var(--ink)]">Detective</h3>
-              <p className="mt-1 text-[var(--muted)]">
-                A daily Connections-style board of players and coaches. Group
-                four names that share a real basketball link. You get a handful
-                of misses, an optional hint, and a score out of 99 from time,
-                accuracy, and difficulty. A new puzzle posts at midnight ET.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-bold text-[var(--ink)]">Superstar Studio</h3>
-              <p className="mt-1 text-[var(--muted)]">
-                Build a custom star across seven attributes, then see where that
-                player would rank against real seasons. The lab scores the build
-                and runs a career so the result is a write-up, not just a
-                number.
-              </p>
-            </div>
-          </div>
-        </section>
+        <details className="group mt-10 rounded-2xl border border-[var(--line)] bg-black/25 text-left">
+          <summary className="cursor-pointer list-none px-5 py-4 font-[family-name:var(--font-display)] text-3xl tracking-wide text-[var(--orange-hot)] [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center justify-between gap-3">
+              How SwishIt works
+              <span
+                aria-hidden
+                className="text-2xl leading-none text-[var(--ink)] transition group-open:rotate-45"
+              >
+                +
+              </span>
+            </span>
+          </summary>
+          <ul className="space-y-3 px-5 pb-5 text-sm leading-relaxed text-[var(--muted)]">
+            <li>
+              <span className="font-bold text-[var(--ink)]">Undefeated.</span>{" "}
+              Spin a year and team, draft a lineup, then run the season.
+            </li>
+            <li>
+              <span className="font-bold text-[var(--ink)]">Detective.</span>{" "}
+              Group four names that share a link. New board at midnight ET.
+            </li>
+            <li>
+              <span className="font-bold text-[var(--ink)]">Superstar Studio.</span>{" "}
+              Assign real players to 7 attributes and build a career.
+            </li>
+          </ul>
+        </details>
 
         <p
           className="mt-10 text-center font-[family-name:var(--font-cozy)] text-3xl italic leading-snug text-[var(--orange-hot)] sm:text-4xl"

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { HowToButton } from "@/components/how-to-play";
+import { SuperstarResult } from "@/components/superstar-result";
 import type { LineupPlayer } from "@/lib/season";
 import {
   ATTRIBUTES,
@@ -11,6 +12,7 @@ import {
   scoreAttribute,
   simulateSuperstarCareer,
   type AttributeKey,
+  type SuperstarCareer,
 } from "@/lib/superstar";
 
 const TEAM_COUNT = 6;
@@ -57,7 +59,6 @@ function pushRecent(list: string[], value: string, max: number) {
 }
 
 export default function SuperstarStudioPage() {
-  const router = useRouter();
   const [rosterPool, setRosterPool] = useState<RosterOption[]>([]);
   const [spinning, setSpinning] = useState(false);
   const [hasSpun, setHasSpun] = useState(false);
@@ -70,6 +71,7 @@ export default function SuperstarStudioPage() {
     {},
   );
   const [error, setError] = useState<string | null>(null);
+  const [career, setCareer] = useState<SuperstarCareer | null>(null);
 
   const recentRosters = useRef<string[]>([]);
   const recentFranchises = useRef<string[]>([]);
@@ -318,12 +320,13 @@ export default function SuperstarStudioPage() {
         score: scoreAttribute(attribute, player),
       };
     });
-    const career = simulateSuperstarCareer(attributePicks);
+    const nextCareer = simulateSuperstarCareer(attributePicks);
     sessionStorage.setItem(
       SUPERSTAR_RESULT_KEY,
-      JSON.stringify({ career }),
+      JSON.stringify({ career: nextCareer }),
     );
-    router.push("/superstar-studio/results");
+    setCareer(nextCareer);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const activeSlot = slots.find((s) => s.id === activeSlotId) ?? null;
@@ -341,19 +344,73 @@ export default function SuperstarStudioPage() {
     return map;
   }, [picks]);
 
+  const playAgain = () => {
+    setCareer(null);
+    setHasSpun(false);
+    setSpinning(false);
+    setSlots([]);
+    setActiveSlotId(null);
+    setRoster([]);
+    setPendingPlayer(null);
+    setPicks({});
+    setError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  if (career) {
+    return (
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pb-10 pt-6 safe-bottom">
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href="/"
+            className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]"
+          >
+            ← SwishIt
+          </Link>
+          <HowToButton
+            title="Superstar Studio"
+            steps={[
+              "Spin once for 6 teams. They stay locked.",
+              "Tap a team to open its roster.",
+              "Tap a player, then an attribute, to assign them.",
+              "Tap a filled attribute to move or swap that player.",
+              "Fill all 7 attributes, then build the career.",
+            ]}
+          />
+        </div>
+        <h1 className="mt-3 text-center font-[family-name:var(--font-display)] text-4xl tracking-wide text-[var(--orange-hot)] sm:text-5xl">
+          SUPERSTAR STUDIO
+        </h1>
+        <div className="mt-5">
+          <SuperstarResult career={career} onPlayAgain={playAgain} />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pb-10 pt-6 safe-bottom">
-      <div className="relative">
+      <div className="flex items-center justify-between gap-2">
         <Link
           href="/"
-          className="absolute left-0 top-1 text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]"
+          className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]"
         >
           ← SwishIt
         </Link>
-        <h1 className="text-center font-[family-name:var(--font-display)] text-4xl tracking-wide text-[var(--orange-hot)] sm:text-5xl">
-          SUPERSTAR STUDIO
-        </h1>
+        <HowToButton
+          title="Superstar Studio"
+          steps={[
+            "Spin once for 6 teams. They stay locked.",
+            "Tap a team to open its roster.",
+            "Tap a player, then an attribute, to assign them.",
+            "Tap a filled attribute to move or swap that player.",
+            "Fill all 7 attributes, then build the career.",
+          ]}
+        />
       </div>
+      <h1 className="mt-3 text-center font-[family-name:var(--font-display)] text-4xl tracking-wide text-[var(--orange-hot)] sm:text-5xl">
+        SUPERSTAR STUDIO
+      </h1>
 
       <div className="mt-5 flex items-start gap-3">
         <div className="min-w-0 flex-1">

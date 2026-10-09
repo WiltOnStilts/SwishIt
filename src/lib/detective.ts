@@ -1,3 +1,5 @@
+import { puzzles, type PuzzleSeed } from "../../prisma/data/puzzles";
+
 export type DetectiveGroup = {
   label: string;
   /** 1 = easiest … 10 = Insane Ball Knowledge */
@@ -83,10 +85,14 @@ export function parseGroups(json: string): DetectiveGroup[] {
 }
 
 /**
- * Score out of 99 (three pillars × 33).
+ * Score out of 99. Time moves with each second, accuracy steps by miss,
+ * and difficulty is the biggest slice so a hard board pays off.
  * Optional hint subtracts HINT_COST from the final total.
  */
 export const HINT_COST = 9;
+export const TIME_MAX = 28;
+export const ACCURACY_MAX = 28;
+export const DIFFICULTY_MAX = 43;
 
 export function scoreDetective(input: {
   elapsedMs: number;
@@ -101,24 +107,28 @@ export function scoreDetective(input: {
     accuracy: number;
     difficulty: number;
     hintPenalty: number;
+    timeMax: number;
+    accuracyMax: number;
+    difficultyMax: number;
   };
 } {
   const time = timeScore(input.elapsedMs);
-
-  const livesLeft = Math.max(0, input.maxMistakes - input.mistakes);
-  const accuracy = Math.round((livesLeft / input.maxMistakes) * 33);
-
-  const sum = input.solvedDifficulties.reduce(
-    (s, d) => s + clamp(d, 1, 10),
-    0,
-  );
-  const difficulty = Math.round((sum / 40) * 33);
+  const accuracy = accuracyScore(input.mistakes);
+  const difficulty = difficultyScore(input.solvedDifficulties);
 
   const hintPenalty = input.hintUsed ? HINT_COST : 0;
   const score = clamp(time + accuracy + difficulty - hintPenalty, 0, 99);
   return {
     score,
-    breakdown: { time, accuracy, difficulty, hintPenalty },
+    breakdown: {
+      time,
+      accuracy,
+      difficulty,
+      hintPenalty,
+      timeMax: TIME_MAX,
+      accuracyMax: ACCURACY_MAX,
+      difficultyMax: DIFFICULTY_MAX,
+    },
   };
 }
 
@@ -164,24 +174,62 @@ export function buildHint(
   };
 }
 
+/** Smooth 0–28. Full credit under 45s, then a curve down to 0 at 8 minutes. */
 export function timeScore(elapsedMs: number): number {
-  const minutes = elapsedMs / 60000;
-  if (minutes >= 7) return 0;
-  if (minutes <= 1) return 33;
-  const floor = Math.floor(minutes);
-  const table: Record<number, number> = {
-    6: 5,
-    5: 10,
-    4: 15,
-    3: 20,
-    2: 25,
-    1: 33,
-  };
-  return table[floor] ?? 0;
+  const seconds = Math.max(0, elapsedMs / 1000);
+  if (seconds <= 45) return TIME_MAX;
+  const limit = 8 * 60;
+  if (seconds >= limit) return 0;
+  const t = (seconds - 45) / (limit - 45);
+  return Math.round(TIME_MAX * (1 - Math.pow(t, 0.85)));
+}
+
+/** 0–28. Misses cost more as they pile up, not a flat slice of 33. */
+export function accuracyScore(mistakes: number): number {
+  const curve = [28, 24, 19, 14, 8, 3];
+  return curve[clamp(Math.round(mistakes), 0, curve.length - 1)] ?? 0;
+}
+
+/**
+ * 0–43 from the board's average group difficulty.
+ * An easy board still scores in the high teens; a hard one can clear 35.
+ */
+export function difficultyScore(solvedDifficulties: number[]): number {
+  const levels = solvedDifficulties.map((d) => clamp(d, 1, 10));
+  if (!levels.length) return 0;
+  const avg = levels.reduce((sum, level) => sum + level, 0) / levels.length;
+  return Math.round(18 + ((avg - 1) / 9) * (DIFFICULTY_MAX - 18));
 }
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
+}
+
+function dayNumber(date: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return 0;
+  return Math.floor(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000,
+  );
+}
+
+/** One new board each day, then the bank repeats. */
+export function puzzleForDate(date: string): PuzzleSeed {
+  const dated = puzzles.find((puzzle) => puzzle.puzzleDate === date);
+  if (dated) return dated;
+
+  const bank = puzzles.filter((puzzle) => !puzzle.puzzleDate);
+  if (!bank.length) {
+    throw new Error("Detective puzzle bank is empty");
+  }
+
+  return bank[dayNumber(date) % bank.length]!;
+}
+
+export function puzzleByCodeId(id: string): PuzzleSeed | null {
+  if (!id.startsWith("code:")) return null;
+  const title = id.slice("code:".length);
+  return puzzles.find((puzzle) => puzzle.title === title) ?? null;
 }
 
 export function normalizeName(name: string) {
