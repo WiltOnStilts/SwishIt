@@ -5,7 +5,9 @@ import {
   closestGroupOverlap,
   isCorrectGroup,
   parseGroups,
+  puzzleByCodeId,
   scoreDetective,
+  type DetectiveGroup,
 } from "@/lib/detective";
 
 export const dynamic = "force-dynamic";
@@ -23,14 +25,19 @@ type Body = {
 
 export async function POST(req: Request) {
   const body = (await req.json()) as Body;
-  const puzzle = await prisma.detectivePuzzle.findUnique({
-    where: { id: body.puzzleId },
-  });
-  if (!puzzle) {
-    return NextResponse.json({ error: "Puzzle not found" }, { status: 404 });
+  const coded = puzzleByCodeId(body.puzzleId);
+  let groups: DetectiveGroup[];
+  if (coded) {
+    groups = coded.groups;
+  } else {
+    const puzzle = await prisma.detectivePuzzle.findUnique({
+      where: { id: body.puzzleId },
+    });
+    if (!puzzle) {
+      return NextResponse.json({ error: "Puzzle not found" }, { status: 404 });
+    }
+    groups = parseGroups(puzzle.groups);
   }
-
-  const groups = parseGroups(puzzle.groups);
 
   if (body.action === "guess") {
     const selection = body.selection ?? [];

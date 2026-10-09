@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { HowToButton } from "@/components/how-to-play";
 import {
   applyStreakResult,
   difficultyStyle,
@@ -35,6 +36,9 @@ export default function DetectiveGame() {
       accuracy: number;
       difficulty: number;
       hintPenalty: number;
+      timeMax?: number;
+      accuracyMax?: number;
+      difficultyMax?: number;
     };
   } | null>(null);
   const [lost, setLost] = useState(false);
@@ -76,7 +80,16 @@ export default function DetectiveGame() {
         setResetsInMs(data.resetsInMs ?? 0);
 
         const saved = localStorage.getItem(`swishit-detective-${data.date}`);
-        if (saved) {
+        const parsedSaved = saved
+          ? (JSON.parse(saved) as {
+              tiles?: string[];
+            })
+          : null;
+        const sameBoard =
+          !!parsedSaved?.tiles &&
+          parsedSaved.tiles.length === data.tiles.length &&
+          parsedSaved.tiles.every((name: string) => data.tiles.includes(name));
+        if (saved && sameBoard) {
           const parsed = JSON.parse(saved) as {
             solved: Solved[];
             mistakes: number;
@@ -354,9 +367,21 @@ export default function DetectiveGame() {
         >
           ← SwishIt
         </Link>
-        <h1 className="font-[family-name:var(--font-display)] text-3xl tracking-wide">
-          Detective
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-[family-name:var(--font-display)] text-3xl tracking-wide">
+            Detective
+          </h1>
+          <HowToButton
+            title="Detective"
+            steps={[
+              "Find 4 groups of 4 names that share a basketball link.",
+              "Select 4 names, then tap Submit.",
+              "You get 5 misses. The bars show how many are left.",
+              "A hint costs 9 points.",
+              "Your score is out of 99. A new board arrives at midnight ET.",
+            ]}
+          />
+        </div>
         <div className="flex flex-col items-center gap-0.5">
           <p className="text-xs font-semibold uppercase tracking-wider text-white">
             Streak
@@ -455,23 +480,14 @@ export default function DetectiveGame() {
 
       {!gameOver && (
         <div className="mt-4 flex flex-col gap-2">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setSelected([])}
-              className="flex-1 rounded-xl border border-[var(--line)] py-3 text-xs font-bold uppercase tracking-wider"
-            >
-              Deselect
-            </button>
-            <button
-              type="button"
-              disabled={selected.length !== 4}
-              onClick={submit}
-              className="flex-[1.4] rounded-xl bg-[var(--orange)] py-3 text-xs font-bold uppercase tracking-wider text-black disabled:opacity-40"
-            >
-              Submit {selected.length}/4
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={selected.length !== 4}
+            onClick={submit}
+            className="w-full rounded-xl bg-[var(--orange)] py-3 text-xs font-bold uppercase tracking-wider text-black disabled:opacity-40"
+          >
+            Submit {selected.length}/4
+          </button>
           {!hintUsed ? (
             <button
               type="button"
@@ -501,9 +517,9 @@ export default function DetectiveGame() {
             <span className="text-3xl text-[var(--muted)]">/99</span>
           </p>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Time {score.breakdown.time}/33 · Accuracy{" "}
-            {score.breakdown.accuracy}/33 · Difficulty{" "}
-            {score.breakdown.difficulty}/33
+            Time {score.breakdown.time}/{score.breakdown.timeMax ?? 28} · Accuracy{" "}
+            {score.breakdown.accuracy}/{score.breakdown.accuracyMax ?? 28} · Difficulty{" "}
+            {score.breakdown.difficulty}/{score.breakdown.difficultyMax ?? 43}
             {score.breakdown.hintPenalty > 0
               ? ` · Hint −${score.breakdown.hintPenalty}`
               : ""}

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { HowToButton } from "@/components/how-to-play";
+import { UndefeatedResult } from "@/components/undefeated-result";
 import {
   canPlaySlot,
   playerDefense,
@@ -10,6 +11,7 @@ import {
   UNDEFEATED_RESULT_KEY,
   type CourtPos,
   type LineupPlayer,
+  type SeasonResult,
 } from "@/lib/season";
 
 type TeamOpt = {
@@ -74,6 +76,14 @@ function slotLabel(slot: SlotKey): string {
   return slot === "sixth" ? "6TH" : SLOTS[slot]!;
 }
 
+const UNDEFEATED_STEPS = [
+  "Spin a year, then a team.",
+  "You get one year respin and one team respin.",
+  "Fill PG, SG, SF, PF, C, and a sixth man from that roster.",
+  "Tap a player, then a lit spot, to place or swap them.",
+  "Run the season to see the record.",
+];
+
 function SwapBadge() {
   return (
     <svg
@@ -137,7 +147,6 @@ function isSwapEligible(
 }
 
 export default function UndefeatedGame() {
-  const router = useRouter();
   const [statsPref, setStatsPref] = useState<boolean | null>(null);
   const [years, setYears] = useState<number[]>([]);
   const [teamsByYear, setTeamsByYear] = useState<Record<number, TeamOpt[]>>({});
@@ -161,6 +170,11 @@ export default function UndefeatedGame() {
   const [error, setError] = useState<string | null>(null);
   const [yearRespinUsed, setYearRespinUsed] = useState(false);
   const [teamRespinUsed, setTeamRespinUsed] = useState(false);
+  const [season, setSeason] = useState<{
+    result: SeasonResult;
+    starters: LineupPlayer[];
+    sixthMan: LineupPlayer | null;
+  } | null>(null);
   const recentYears = useRef<number[]>([]);
   const recentRosters = useRef<string[]>([]);
   const recentFranchises = useRef<string[]>([]);
@@ -535,15 +549,14 @@ export default function UndefeatedGame() {
         setError(data.error ?? "Simulation failed");
         return;
       }
-      sessionStorage.setItem(
-        UNDEFEATED_RESULT_KEY,
-        JSON.stringify({
-          result: data,
-          starters,
-          sixthMan: sixth,
-        }),
-      );
-      router.push("/undefeated/results");
+      const stored = {
+        result: data as SeasonResult,
+        starters: starters.filter((player): player is LineupPlayer => !!player),
+        sixthMan: sixth,
+      };
+      sessionStorage.setItem(UNDEFEATED_RESULT_KEY, JSON.stringify(stored));
+      setSeason(stored);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       setError("Simulation failed");
     } finally {
@@ -564,7 +577,7 @@ export default function UndefeatedGame() {
           <h1 className="font-[family-name:var(--font-display)] text-3xl tracking-wide text-[var(--orange-hot)]">
             Undefeated
           </h1>
-          <span className="w-14" />
+          <HowToButton title="Undefeated" steps={UNDEFEATED_STEPS} />
         </div>
 
         <div className="animate-rise mt-10 flex items-stretch gap-2 sm:gap-3">
@@ -632,6 +645,45 @@ export default function UndefeatedGame() {
     pendingFromSlot != null &&
     isSwapEligible(pendingPlayer, pendingFromSlot, "sixth", sixth);
 
+  const playAgain = () => {
+    setSeason(null);
+    setYear(null);
+    setTeam(null);
+    setPlayers([]);
+    setStarters([null, null, null, null, null]);
+    setSixth(null);
+    setPendingPlayer(null);
+    setYearRespinUsed(false);
+    setTeamRespinUsed(false);
+    setError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  if (season) {
+    return (
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pt-6 safe-bottom">
+        <div className="mb-5 flex items-center justify-between">
+          <Link
+            href="/"
+            className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]"
+          >
+            ← SwishIt
+          </Link>
+          <h1 className="font-[family-name:var(--font-display)] text-3xl tracking-wide text-[var(--orange-hot)]">
+            Undefeated
+          </h1>
+          <HowToButton title="Undefeated" steps={UNDEFEATED_STEPS} />
+        </div>
+        <UndefeatedResult
+          result={season.result}
+          starters={season.starters}
+          sixthMan={season.sixthMan}
+          onPlayAgain={playAgain}
+        />
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pt-6 safe-bottom">
       <div className="mb-5 flex items-center justify-between">
@@ -644,13 +696,16 @@ export default function UndefeatedGame() {
         <h1 className="font-[family-name:var(--font-display)] text-3xl tracking-wide text-[var(--orange-hot)]">
           Undefeated
         </h1>
-        <button
-          type="button"
-          onClick={() => setStatsPref((v) => !v)}
-          className="text-[10px] font-bold uppercase tracking-wider text-[var(--orange-hot)]"
-        >
-          Stats {showStats ? "on" : "off"}
-        </button>
+        <div className="flex items-center gap-2">
+          <HowToButton title="Undefeated" steps={UNDEFEATED_STEPS} />
+          <button
+            type="button"
+            onClick={() => setStatsPref((v) => !v)}
+            className="text-[10px] font-bold uppercase tracking-wider text-[var(--orange-hot)]"
+          >
+            Stats {showStats ? "on" : "off"}
+          </button>
+        </div>
       </div>
 
       <section className="rounded-2xl border border-[var(--line)] bg-black/25 p-4">
