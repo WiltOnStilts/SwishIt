@@ -7,6 +7,11 @@
 #
 # Do NOT set NODE_ENV in the dashboard. Do NOT keep an old command that
 # runs `npm run db:seed` unless you have this commit (seed skips on Render).
+#
+# While a free instance is asleep, Render itself answers /robots.txt with
+# "Disallow: /" and does not wake the app. Google then treats the site as
+# blocked. The GitHub Action in .github/workflows/keep-awake.yml pings
+# /api/health so that path is served by this app instead.
 
 services:
   - type: web
