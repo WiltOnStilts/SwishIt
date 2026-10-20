@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { Bebas_Neue, Fraunces, Manrope } from "next/font/google";
+import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
 
 const display = Bebas_Neue({
@@ -47,8 +48,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${display.variable} ${body.variable} ${cozy.variable} h-full`}
     >
-      <body className="min-h-full flex flex-col antialiased">{children}</body>
-      {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
+      <body className="flex min-h-full flex-col antialiased">
+        {children}
+        <SiteFooter />
+        {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
+      </body>
     </html>
   );
 }
