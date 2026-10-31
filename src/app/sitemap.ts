@@ -29,15 +29,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
-<<<<<<< HEAD
       url: `${SITE}/court-call`,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.9,
     },
     {
-=======
->>>>>>> 6d0891f8f1a9a48321d0b3aed0941cbdc057917e
       url: `${SITE}/about`,
       lastModified: new Date(),
       changeFrequency: "monthly",
