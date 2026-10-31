@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="Jerryd Bayless">
+  <defs>
+    <clipPath id="c"><circle cx="32" cy="32" r="30"/></clipPath>
+  </defs>
+  <circle cx="32" cy="32" r="31" fill="#1a100c"/>
+  <g clip-path="url(#c)">
+    <circle cx="32" cy="32" r="30" fill="#c9a57a"/>
+    <ellipse cx="12" cy="34" rx="6.3" ry="8.3" fill="#a56b34"/>
+    <ellipse cx="52" cy="34" rx="6.3" ry="8.3" fill="#a56b34"/>
+    <path d="M13 16 C13 12 17 10 23 10 H41 C47 10 51 12 51 16 V48 C51 56 43 58 32 58 C21 58 13 56 13 48 Z" fill="#c68642"/>
+    
+    <path d="M19 27 Q24 29 29 27" stroke="#1a120e" stroke-width="2.3" fill="none" stroke-linecap="round"/><path d="M35 27 Q40 29 45 27" stroke="#1a120e" stroke-width="2.3" fill="none" stroke-linecap="round"/>
+    <ellipse cx="24" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <ellipse cx="40" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <circle cx="24.5" cy="33.4" r="1.9" fill="#0f172a"/>
+    <circle cx="40.5" cy="33.4" r="1.9" fill="#0f172a"/>
+    <circle cx="25.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <circle cx="41.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <path d="M32 35 L29.5 41 L34.5 41 Z" fill="#a56b34"/>
+    <path d="M18 40 Q32 58 46 40 L42 42 Q32 54 22 42 Z" fill="#3b2f2f"/><path d="M22 40 Q32 46 42 40 Q36 44 32 44 Q28 44 22 40 Z" fill="#3b2f2f"/>
+    <path d="M25 46 Q32 49 39 46" stroke="#a56b34" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+  <circle cx="32" cy="32" r="30" fill="none" stroke="#f97316" stroke-width="2.5" opacity="0.9"/>
+</svg>

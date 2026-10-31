@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="Kelvin Ransey">
+  <defs>
+    <clipPath id="c"><circle cx="32" cy="32" r="30"/></clipPath>
+  </defs>
+  <circle cx="32" cy="32" r="31" fill="#1a100c"/>
+  <g clip-path="url(#c)">
+    <circle cx="32" cy="32" r="30" fill="#c9a57a"/>
+    <ellipse cx="12" cy="34" rx="6.3" ry="8.3" fill="#432820"/>
+    <ellipse cx="52" cy="34" rx="6.3" ry="8.3" fill="#432820"/>
+    <path d="M13 16 C13 12 17 10 23 10 H41 C47 10 51 12 51 16 V48 C51 56 43 58 32 58 C21 58 13 56 13 48 Z" fill="#5c3830"/>
+    <path d="M13 30 C13 14 21 7 32 7 C43 7 51 14 51 30 L47 22 C43 13 37 11 32 11 C27 11 21 13 17 22 Z" fill="#3b2f2f" stroke="#cfc0a8" stroke-width="1.6"/><path d="M11 34 C13 24 17 20 21 20 L19 36 Z" fill="#3b2f2f" opacity="0.7"/><path d="M53 34 C51 24 47 20 43 20 L45 36 Z" fill="#3b2f2f" opacity="0.7"/>
+    <path d="M19 29 Q24 25 29 29" stroke="#3b2314" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M35 29 Q40 25 45 29" stroke="#3b2314" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="24" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <ellipse cx="40" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <circle cx="24.5" cy="33.4" r="1.9" fill="#0f172a"/>
+    <circle cx="40.5" cy="33.4" r="1.9" fill="#0f172a"/>
+    <circle cx="25.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <circle cx="41.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <path d="M32 35 L29.5 41 L34.5 41 Z" fill="#432820"/>
+    <ellipse cx="32" cy="46" rx="13" ry="9" fill="#3b2f2f" opacity="0.28"/>
+    <path d="M27 48 L37 47" stroke="#432820" stroke-width="2.2" stroke-linecap="round"/>
+  </g>
+  <circle cx="32" cy="32" r="30" fill="none" stroke="#f97316" stroke-width="2.5" opacity="0.9"/>
+</svg>

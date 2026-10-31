@@ -19,6 +19,15 @@ export async function GET(req: Request) {
     orderBy: [{ ppg: "desc" }],
   });
 
+  const names = [...new Set(players.map((p) => p.playerName))];
+  const faces = names.length
+    ? await prisma.playerFace.findMany({
+        where: { playerName: { in: names } },
+        select: { playerName: true, imagePath: true },
+      })
+    : [];
+  const faceByName = new Map(faces.map((f) => [f.playerName, f.imagePath]));
+
   return NextResponse.json({
     players: players.map((p) => {
       const positions = parsePositions(p.position);
@@ -43,6 +52,7 @@ export async function GET(req: Request) {
         champion: p.champion,
         teamName: p.team.name,
         teamAbbr: p.team.abbreviation,
+        faceUrl: faceByName.get(p.playerName) ?? null,
       };
     }),
   });

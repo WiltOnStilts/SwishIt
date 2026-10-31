@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="Carlos Arroyo">
+  <defs>
+    <clipPath id="c"><circle cx="32" cy="32" r="30"/></clipPath>
+  </defs>
+  <circle cx="32" cy="32" r="31" fill="#1a100c"/>
+  <g clip-path="url(#c)">
+    <circle cx="32" cy="32" r="30" fill="#c9a57a"/>
+    <ellipse cx="12" cy="34" rx="5.5" ry="7.5" fill="#2a1812"/>
+    <ellipse cx="52" cy="34" rx="5.5" ry="7.5" fill="#2a1812"/>
+    <path d="M32 10 C48 10 54 24 54 34 C54 50 44 58 32 58 C20 58 10 50 10 34 C10 24 16 10 32 10 Z" fill="#3b241a"/>
+    <path d="M16 14 C20 6 28 4 32 4 C36 4 44 6 48 14" stroke="#d9b07a" stroke-width="3.2" fill="none"/><path d="M18 16 L18 34" stroke="#24160e" stroke-width="2.8"/><path d="M24 14 L24 36" stroke="#24160e" stroke-width="2.8"/><path d="M32 12 L32 38" stroke="#24160e" stroke-width="2.8"/><path d="M40 14 L40 36" stroke="#24160e" stroke-width="2.8"/><path d="M46 16 L46 34" stroke="#24160e" stroke-width="2.8"/><path d="M18 16 L18 34" stroke="#d9b07a" stroke-width="1"/><path d="M32 12 L32 38" stroke="#d9b07a" stroke-width="1"/>
+    <path d="M19 27 Q24 24 29 28" stroke="#2c1810" stroke-width="2.3" fill="none" stroke-linecap="round"/><path d="M35 28 Q40 24 45 27" stroke="#2c1810" stroke-width="2.3" fill="none" stroke-linecap="round"/>
+    <ellipse cx="24" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <ellipse cx="40" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <circle cx="24.5" cy="33.4" r="1.9" fill="#1f2937"/>
+    <circle cx="40.5" cy="33.4" r="1.9" fill="#1f2937"/>
+    <circle cx="25.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <circle cx="41.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <path d="M32 35 L29.5 41 L34.5 41 Z" fill="#2a1812"/>
+    
+    <ellipse cx="32" cy="48" rx="4.2" ry="3.2" fill="#3b1f14"/><ellipse cx="32" cy="47.2" rx="3" ry="1.2" fill="#c45c4a" opacity="0.7"/>
+  </g>
+  <circle cx="32" cy="32" r="30" fill="none" stroke="#f97316" stroke-width="2.5" opacity="0.9"/>
+</svg>

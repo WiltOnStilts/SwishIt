@@ -107,6 +107,23 @@ export default function HomePage() {
               Enter the lab →
             </span>
           </a>
+
+          <a
+            href="/court-call"
+            className="animate-rise-delay-2 group relative overflow-hidden rounded-2xl border border-[var(--line)] bg-gradient-to-br from-[#2c180c] to-[#100c08] p-5 transition active:scale-[0.98]"
+          >
+            <div className="absolute -right-8 top-4 h-28 w-28 rounded-full bg-[var(--orange-hot)]/20 blur-2xl transition group-hover:bg-[var(--orange)]/30" />
+            <p className="font-[family-name:var(--font-display)] text-4xl tracking-wide text-[var(--orange-hot)]">
+              Court Call
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
+              5-on-5 arcade basketball. Pick any all-time team, then move,
+              pass, shoot, steal, and board.
+            </p>
+            <span className="mt-4 inline-flex text-xs font-bold uppercase tracking-[0.2em] text-[var(--ink)]">
+              Tip off →
+            </span>
+          </a>
         </div>
 
         <section className="mt-10 space-y-4 text-left text-sm leading-relaxed text-[var(--muted)]">
@@ -131,6 +148,12 @@ export default function HomePage() {
             locks six team-seasons after a spin. You assign players to scoring,
             playmaking, defense, and other attributes, then generate a career
             projection from that mix.
+          </p>
+          <p>
+            <span className="font-bold text-[var(--ink)]">Court Call</span> is
+            live 5-on-5. Search any historical roster (or tip off random), then
+            control your player with a joystick or keys—shoot, pass, steal, and
+            rebound.
           </p>
         </section>
 
@@ -158,6 +181,10 @@ export default function HomePage() {
             <li>
               <span className="font-bold text-[var(--ink)]">Superstar Studio.</span>{" "}
               Assign real players to 7 attributes and build a career.
+            </li>
+            <li>
+              <span className="font-bold text-[var(--ink)]">Court Call.</span>{" "}
+              Pick a team and play 5-on-5 with simple arcade controls.
             </li>
             <li>
               <span className="font-bold text-[var(--ink)]">Ads.</span> Google

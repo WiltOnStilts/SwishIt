@@ -44,6 +44,17 @@ model PlayerSeason {
   @@index([year, position])
 }
 
+/// Cartoon 2D portrait for Court Call (one row per unique player name).
+model PlayerFace {
+  playerName String @id
+  /// JSON FaceDna used to rebuild the portrait if needed
+  faceJson   String
+  /// Public URL path, e.g. /player-faces/michael-jordan-abcd1234.svg
+  imagePath  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 model Coach {
   id         String @id @default(cuid())
   name       String @unique

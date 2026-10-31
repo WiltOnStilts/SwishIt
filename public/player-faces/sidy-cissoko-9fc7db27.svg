@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="Sidy Cissoko">
+  <defs>
+    <clipPath id="c"><circle cx="32" cy="32" r="30"/></clipPath>
+  </defs>
+  <circle cx="32" cy="32" r="31" fill="#1a100c"/>
+  <g clip-path="url(#c)">
+    <circle cx="32" cy="32" r="30" fill="#c9a57a"/>
+    <ellipse cx="12" cy="34" rx="6.5" ry="8.5" fill="#2a1812"/>
+    <ellipse cx="52" cy="34" rx="6.5" ry="8.5" fill="#2a1812"/>
+    <path d="M13 16 C13 12 17 10 23 10 H41 C47 10 51 12 51 16 V48 C51 56 43 58 32 58 C21 58 13 56 13 48 Z" fill="#3b241a"/>
+    <circle cx="18" cy="16" r="8" fill="#4a3020" stroke="#e8c49a" stroke-width="1.6"/><circle cx="28" cy="10" r="8" fill="#4a3020" stroke="#e8c49a" stroke-width="1.6"/><circle cx="38" cy="10" r="8" fill="#4a3020" stroke="#e8c49a" stroke-width="1.6"/><circle cx="46" cy="16" r="8" fill="#4a3020" stroke="#e8c49a" stroke-width="1.6"/><circle cx="32" cy="18" r="10" fill="#4a3020" stroke="#e8c49a" stroke-width="1.6"/>
+    <path d="M19 29 Q24 25 29 29" stroke="#4a3020" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M35 29 Q40 25 45 29" stroke="#4a3020" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="24" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <ellipse cx="40" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <circle cx="24.5" cy="33.4" r="1.9" fill="#111827"/>
+    <circle cx="40.5" cy="33.4" r="1.9" fill="#111827"/>
+    <circle cx="25.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <circle cx="41.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <path d="M32 35 L29.5 41 L34.5 41 Z" fill="#2a1812"/>
+    <path d="M28 44 Q32 56 36 44 Q32 48 28 44 Z" fill="#4a3020"/><path d="M24 42 Q32 46 40 42 Q34 45 32 45 Q30 45 24 42 Z" fill="#4a3020"/>
+    <path d="M27 48 L37 47" stroke="#2a1812" stroke-width="2.2" stroke-linecap="round"/>
+  </g>
+  <circle cx="32" cy="32" r="30" fill="none" stroke="#f97316" stroke-width="2.5" opacity="0.9"/>
+</svg>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="Mike Scott">
+  <defs>
+    <clipPath id="c"><circle cx="32" cy="32" r="30"/></clipPath>
+  </defs>
+  <circle cx="32" cy="32" r="31" fill="#1a100c"/>
+  <g clip-path="url(#c)">
+    <circle cx="32" cy="32" r="30" fill="#c9a57a"/>
+    <ellipse cx="12" cy="34" rx="5.3" ry="7.3" fill="#c9946e"/>
+    <ellipse cx="52" cy="34" rx="5.3" ry="7.3" fill="#c9946e"/>
+    <path d="M32 9 C50 9 55 23 55 34 C55 52 44 59 32 59 C20 59 9 52 9 34 C9 23 14 9 32 9 Z" fill="#e2b896"/>
+    <path d="M16 14 C20 6 28 4 32 4 C36 4 44 6 48 14" stroke="#cfc0a8" stroke-width="3.2" fill="none"/><path d="M18 16 L18 34" stroke="#3b2f2f" stroke-width="2.8"/><path d="M24 14 L24 36" stroke="#3b2f2f" stroke-width="2.8"/><path d="M32 12 L32 38" stroke="#3b2f2f" stroke-width="2.8"/><path d="M40 14 L40 36" stroke="#3b2f2f" stroke-width="2.8"/><path d="M46 16 L46 34" stroke="#3b2f2f" stroke-width="2.8"/><path d="M18 16 L18 34" stroke="#cfc0a8" stroke-width="1"/><path d="M32 12 L32 38" stroke="#cfc0a8" stroke-width="1"/>
+    <path d="M19 28 Q24 25 29 28" stroke="#2c1810" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M35 28 Q40 25 45 28" stroke="#2c1810" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    <ellipse cx="24" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <ellipse cx="40" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <circle cx="24.5" cy="33.4" r="1.9" fill="#0f172a"/>
+    <circle cx="40.5" cy="33.4" r="1.9" fill="#0f172a"/>
+    <circle cx="25.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <circle cx="41.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <path d="M32 35 L29.5 41 L34.5 41 Z" fill="#c9946e"/>
+    <path d="M23 42 Q32 48 41 42 Q35 46 32 46 Q29 46 23 42 Z" fill="#3b2f2f"/>
+    <path d="M25 46 Q32 51 39 46" stroke="#c9946e" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  </g>
+  <circle cx="32" cy="32" r="30" fill="none" stroke="#f97316" stroke-width="2.5" opacity="0.9"/>
+</svg>

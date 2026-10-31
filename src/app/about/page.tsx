@@ -54,6 +54,11 @@ export default function AboutPage() {
           lets you assemble a custom star from seven attributes tied to real
           team-season players, then projects a career path from those choices.
         </p>
+        <p>
+          <span className="font-bold text-[var(--ink)]">Court Call</span> is
+          arcade 5-on-5: pick any all-time team, tip off, and play with a
+          joystick or keyboard—pass, shoot, steal, and rebound.
+        </p>
 
         <h2 className="pt-2 font-[family-name:var(--font-display)] text-3xl tracking-wide text-[var(--ink)]">
           Ads and privacy

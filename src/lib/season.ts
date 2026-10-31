@@ -21,6 +21,8 @@ export type LineupPlayer = {
   champion: boolean;
   teamName: string;
   teamAbbr: string;
+  /** Court Call portrait URL from PlayerFace, e.g. /player-faces/….svg */
+  faceUrl?: string | null;
 };
 
 export type PlayoffRoundResult = {

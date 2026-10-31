@@ -12,6 +12,7 @@
     "db:seed": "node scripts/seed-cli.mjs",
     "db:ensure": "tsx scripts/ensure-db.ts",
     "db:expand-players": "tsx scripts/expand-player-db.ts",
+    "db:faces": "tsx scripts/generate-player-faces.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio"
   },

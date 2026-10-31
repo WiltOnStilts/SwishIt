@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="Rich Kelley">
+  <defs>
+    <clipPath id="c"><circle cx="32" cy="32" r="30"/></clipPath>
+  </defs>
+  <circle cx="32" cy="32" r="31" fill="#1a100c"/>
+  <g clip-path="url(#c)">
+    <circle cx="32" cy="32" r="30" fill="#c9a57a"/>
+    <ellipse cx="12" cy="34" rx="5.5" ry="7.5" fill="#432820"/>
+    <ellipse cx="52" cy="34" rx="5.5" ry="7.5" fill="#432820"/>
+    <path d="M32 9 C50 9 55 23 55 34 C55 52 44 59 32 59 C20 59 9 52 9 34 C9 23 14 9 32 9 Z" fill="#5c3830"/>
+    <path d="M12 28 C12 12 20 6 32 6 C44 6 52 12 52 28 L48 24 C44 14 38 12 32 12 C26 12 20 14 16 24 Z" fill="#2a1810" stroke="#d4a574" stroke-width="1.6"/>
+    <path d="M19 27 Q24 24 29 28" stroke="#1a120e" stroke-width="2.3" fill="none" stroke-linecap="round"/><path d="M35 28 Q40 24 45 27" stroke="#1a120e" stroke-width="2.3" fill="none" stroke-linecap="round"/>
+    <ellipse cx="24" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <ellipse cx="40" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <circle cx="24.5" cy="33.4" r="1.9" fill="#3f2a1d"/>
+    <circle cx="40.5" cy="33.4" r="1.9" fill="#3f2a1d"/>
+    <circle cx="25.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <circle cx="41.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <path d="M32 35 L29.5 41 L34.5 41 Z" fill="#432820"/>
+    <ellipse cx="32" cy="46" rx="13" ry="9" fill="#2a1810" opacity="0.28"/>
+    <path d="M24 45 Q32 53 40 45" fill="#3b1f14"/><path d="M26 46 Q32 51 38 46" fill="#f5f0e8"/>
+  </g>
+  <circle cx="32" cy="32" r="30" fill="none" stroke="#f97316" stroke-width="2.5" opacity="0.9"/>
+</svg>

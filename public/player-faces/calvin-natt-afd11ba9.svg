@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="Calvin Natt">
+  <defs>
+    <clipPath id="c"><circle cx="32" cy="32" r="30"/></clipPath>
+  </defs>
+  <circle cx="32" cy="32" r="31" fill="#1a100c"/>
+  <g clip-path="url(#c)">
+    <circle cx="32" cy="32" r="30" fill="#c9a57a"/>
+    <ellipse cx="12" cy="34" rx="5.2" ry="7.2" fill="#6f4119"/>
+    <ellipse cx="52" cy="34" rx="5.2" ry="7.2" fill="#6f4119"/>
+    <path d="M32 9 C50 9 55 23 55 34 C55 52 44 59 32 59 C20 59 9 52 9 34 C9 23 14 9 32 9 Z" fill="#8d5524"/>
+    
+    <path d="M19 28 Q24 25 29 28" stroke="#111111" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M35 28 Q40 25 45 28" stroke="#111111" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    <ellipse cx="24" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <ellipse cx="40" cy="33" rx="3.6" ry="4" fill="#fff"/>
+    <circle cx="24.5" cy="33.4" r="1.9" fill="#111827"/>
+    <circle cx="40.5" cy="33.4" r="1.9" fill="#111827"/>
+    <circle cx="25.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <circle cx="41.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
+    <path d="M32 35 L29.5 41 L34.5 41 Z" fill="#6f4119"/>
+    <path d="M23 42 Q32 48 41 42 Q35 46 32 46 Q29 46 23 42 Z" fill="#6b4423"/>
+    <path d="M25 46 Q32 51 39 46" stroke="#6f4119" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  </g>
+  <circle cx="32" cy="32" r="30" fill="none" stroke="#f97316" stroke-width="2.5" opacity="0.9"/>
+</svg>
