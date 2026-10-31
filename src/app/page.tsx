@@ -107,6 +107,7 @@ export default function HomePage() {
               Enter the lab →
             </span>
           </a>
+<<<<<<< HEAD
 
           <a
             href="/court-call"
@@ -124,6 +125,8 @@ export default function HomePage() {
               Tip off →
             </span>
           </a>
+=======
+>>>>>>> 6d0891f8f1a9a48321d0b3aed0941cbdc057917e
         </div>
 
         <section className="mt-10 space-y-4 text-left text-sm leading-relaxed text-[var(--muted)]">
@@ -149,12 +152,15 @@ export default function HomePage() {
             playmaking, defense, and other attributes, then generate a career
             projection from that mix.
           </p>
+<<<<<<< HEAD
           <p>
             <span className="font-bold text-[var(--ink)]">Court Call</span> is
             live 5-on-5. Search any historical roster (or tip off random), then
             control your player with a joystick or keys—shoot, pass, steal, and
             rebound.
           </p>
+=======
+>>>>>>> 6d0891f8f1a9a48321d0b3aed0941cbdc057917e
         </section>
 
         <details className="group mt-8 rounded-2xl border border-[var(--line)] bg-black/25 text-left">
@@ -183,10 +189,13 @@ export default function HomePage() {
               Assign real players to 7 attributes and build a career.
             </li>
             <li>
+<<<<<<< HEAD
               <span className="font-bold text-[var(--ink)]">Court Call.</span>{" "}
               Pick a team and play 5-on-5 with simple arcade controls.
             </li>
             <li>
+=======
+>>>>>>> 6d0891f8f1a9a48321d0b3aed0941cbdc057917e
               <span className="font-bold text-[var(--ink)]">Ads.</span> Google
               ads, when shown, appear on this home page only—not inside the
               games.
