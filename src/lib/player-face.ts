@@ -264,12 +264,21 @@ function browSvg(expression: FaceExpression, brow: string): string {
 }
 
 /**
- * Portrait SVG with centered features, varied expressions, and hair rim light
- * so dark hair stays visible on the court.
+ * Portrait SVG — Jetpack Joyride chibi head (big eyes, thick brows, toothy grin).
+ * Skin / hair / facial hair come from curated FaceDna so players match real looks.
  */
 export function renderFaceSvg(dna: FaceDna, playerName: string): string {
   const ear = dna.ear;
   const title = playerName.replace(/[<>&"]/g, "");
+  const toothy =
+    dna.expression === "grin" ||
+    dna.expression === "smile" ||
+    dna.expression === "open";
+  const mouth = toothy
+    ? `<path d="M22 45 Q32 56 42 45 Q32 48 22 45 Z" fill="#2a1510"/>
+    <path d="M24 46 Q32 52 40 46 Q32 48.5 24 46 Z" fill="#fff8f0"/>
+    <path d="M27 46.5 L27 50.5 M30 47 L30 51.2 M32 47 L32 51.4 M34 47 L34 51.2 M37 46.5 L37 50.5" stroke="rgba(40,20,12,0.35)" stroke-width="0.7"/>`
+    : mouthSvg(dna.expression, dna.skinShade);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="${title}">
   <defs>
@@ -277,21 +286,21 @@ export function renderFaceSvg(dna: FaceDna, playerName: string): string {
   </defs>
   <circle cx="32" cy="32" r="31" fill="#1a100c"/>
   <g clip-path="url(#c)">
-    <circle cx="32" cy="32" r="30" fill="#c9a57a"/>
+    <circle cx="32" cy="32" r="30" fill="${dna.skinShade}"/>
     <ellipse cx="${32 - 20}" cy="34" rx="${ear}" ry="${ear + 2}" fill="${dna.skinShade}"/>
     <ellipse cx="${32 + 20}" cy="34" rx="${ear}" ry="${ear + 2}" fill="${dna.skinShade}"/>
     <path d="${headPath(dna.head)}" fill="${dna.skin}"/>
     ${hairSvg(dna)}
     ${browSvg(dna.expression, dna.brow)}
-    <ellipse cx="24" cy="33" rx="3.6" ry="4" fill="#fff"/>
-    <ellipse cx="40" cy="33" rx="3.6" ry="4" fill="#fff"/>
-    <circle cx="24.5" cy="33.4" r="1.9" fill="${dna.eye}"/>
-    <circle cx="40.5" cy="33.4" r="1.9" fill="${dna.eye}"/>
-    <circle cx="25.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
-    <circle cx="41.2" cy="32.6" r="0.55" fill="#fff" opacity="0.85"/>
-    <path d="M32 35 L29.5 41 L34.5 41 Z" fill="${dna.skinShade}"/>
+    <ellipse cx="23.5" cy="32" rx="5.2" ry="5.8" fill="#fff"/>
+    <ellipse cx="40.5" cy="32" rx="5.2" ry="5.8" fill="#fff"/>
+    <circle cx="24" cy="32.6" r="2.6" fill="${dna.eye}"/>
+    <circle cx="41" cy="32.6" r="2.6" fill="${dna.eye}"/>
+    <circle cx="25.2" cy="31.4" r="0.85" fill="#fff" opacity="0.9"/>
+    <circle cx="42.2" cy="31.4" r="0.85" fill="#fff" opacity="0.9"/>
+    <path d="M32 35 L29.2 42 L34.8 42 Z" fill="${dna.skinShade}"/>
     ${facialSvg(dna)}
-    ${mouthSvg(dna.expression, dna.skinShade)}
+    ${mouth}
   </g>
   <circle cx="32" cy="32" r="30" fill="none" stroke="#f97316" stroke-width="2.5" opacity="0.9"/>
 </svg>

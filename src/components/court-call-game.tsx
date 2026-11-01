@@ -14,7 +14,8 @@ import {
   type CourtDifficulty,
   type CourtSquad,
 } from "@/lib/court-call";
-import { facePublicPath, lastNameOf } from "@/lib/player-face";
+import { faceDnaFromName, lastNameOf, type FaceDna } from "@/lib/player-face";
+import { drawCourtCallSprite, type SpritePose } from "@/lib/court-call-sprite";
 
 type Side = "you" | "opp";
 
@@ -24,7 +25,7 @@ type Actor = {
   slot: CourtPos;
   name: string;
   lastName: string;
-  faceUrl: string;
+  dna: FaceDna;
   x: number;
   y: number;
   vx: number;
@@ -43,6 +44,9 @@ const STEAL_REACH = 2.45;
 const REBOUND_REACH = 2.35;
 /** Contested block while the shot is up. */
 const BLOCK_REACH = 2.55;
+/** Sim-time for every shot to reach the rim — same length near or deep. */
+const SHOT_FLIGHT_SEC = 0.72;
+const SHOT_HIT_RADIUS = 2.15;
 
 type BallState = {
   x: number;
@@ -120,6 +124,14 @@ type GameState = {
   inbound: InboundState | null;
   /** Real-time deadline for post-shot slow motion. */
   slowMoUntil: number;
+  /** 1–4 regular, 5 = OT. */
+  quarter: number;
+  /** Seconds left in the current quarter. */
+  quarterClock: number;
+  /** Seconds left on the shot clock. */
+  shotClock: number;
+  /** Brief pause between quarters. */
+  quarterBreakUntil: number;
 };
 
 const W = 50;
@@ -130,9 +142,22 @@ const VIEW_H = 54;
 const PLAYER_R = 2.9;
 const PLAYER_GAP = 0.7;
 const BALL_R = 0.72;
-const WIN_SCORE = 11;
+const QUARTER_SEC = 60;
+const SHOT_CLOCK_SEC = 24;
+const REG_QUARTERS = 4;
 const SLOTS: CourtPos[] = ["PG", "SG", "SF", "PF", "C"];
 const MIN_SEPARATION = PLAYER_R * 2 + PLAYER_GAP;
+
+function formatClock(seconds: number) {
+  const s = Math.max(0, Math.ceil(seconds - 1e-6));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
+function resetShotClock(state: GameState) {
+  state.shotClock = SHOT_CLOCK_SEC;
+}
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -170,7 +195,7 @@ function makeActors(you: CourtSquad, opp: CourtSquad): Actor[] {
       slot,
       name: yp.playerName,
       lastName: lastNameOf(yp.playerName),
-      faceUrl: yp.faceUrl || facePublicPath(yp.playerName),
+      dna: faceDnaFromName(yp.playerName),
       x: yx,
       y: yy,
       vx: 0,
@@ -187,7 +212,7 @@ function makeActors(you: CourtSquad, opp: CourtSquad): Actor[] {
       slot,
       name: op.playerName,
       lastName: lastNameOf(op.playerName),
-      faceUrl: op.faceUrl || facePublicPath(op.playerName),
+      dna: faceDnaFromName(op.playerName),
       x: ox,
       y: oy,
       vx: 0,
@@ -215,7 +240,8 @@ function updateFacing(a: Actor) {
 function placeDribbleBall(state: GameState, owner: Actor, now: number) {
   updateFacing(owner);
   const bob = Math.abs(Math.sin(now / 110));
-  const forward = PLAYER_R + 0.5 + bob * 0.4;
+  // Chibi torso is shorter than the old face-circle radius — keep the ball out front.
+  const forward = 2.35 + bob * 0.45;
   // Push slightly toward the dominant horizontal side when cutting diagonally
   // so up-left / up-right reads clearly as top-left / top-right of the body.
   const sidePush = owner.faceX * 0.35;
@@ -223,19 +249,26 @@ function placeDribbleBall(state: GameState, owner: Actor, now: number) {
   state.ball.y = clamp(owner.y + owner.faceY * forward, 1.5, H - 1.5);
 }
 
-function resetAfterScore(state: GameState, scorer: Side) {
-  const receiving: Side = scorer === "you" ? "opp" : "you";
-  // Inbound from the baseline of the hoop that was just scored on.
-  const baselineY = scorer === "you" ? 3.2 : H - 3.2;
-  const floorY = scorer === "you" ? 16 : H - 16;
+/**
+ * Start a baseline inbound for `receiving`.
+ * `atTop` = inbound from the top baseline (opp hoop end).
+ */
+function startInbound(
+  state: GameState,
+  receiving: Side,
+  atTop: boolean,
+  now: number,
+  message: string,
+  opts?: { slowMoMs?: number; scorePulse?: boolean; lastScorer?: Side | null },
+) {
+  const baselineY = atTop ? 3.2 : H - 3.2;
+  const floorY = atTop ? 16 : H - 16;
 
-  // Keep everyone where they are — they run to spots instead of teleporting.
   for (const a of state.actors) {
     a.vx *= 0.35;
     a.vy *= 0.35;
   }
 
-  // Closest receiving player to the scored hoop brings it out (no warp).
   const inbounder = state.actors
     .filter((a) => a.side === receiving)
     .sort(
@@ -258,7 +291,6 @@ function resetAfterScore(state: GameState, scorer: Side) {
       state.actors.find((a) => a.side === receiving && a.id !== inbounder.id)!;
   }
 
-  const now = performance.now();
   state.ball = {
     x: inbounder.x,
     y: inbounder.y,
@@ -275,7 +307,8 @@ function resetAfterScore(state: GameState, scorer: Side) {
   };
   state.meter = { active: false, t: 0, dir: 1, startedAt: 0, holdUntil: 0 };
   state.campTimer = 0;
-  beginSlowMo(state, now, 1400);
+  resetShotClock(state);
+  if (opts?.slowMoMs) beginSlowMo(state, now, opts.slowMoMs);
   state.inbound = {
     fromId: inbounder.id,
     toId: to.id,
@@ -285,13 +318,50 @@ function resetAfterScore(state: GameState, scorer: Side) {
     releaseAt: null,
     catchAt: null,
   };
-  state.message = scorer === "you" ? "YOU SCORE! · Opp ball" : "THEY SCORE! · Your ball";
+  state.message = message;
   state.messageUntil = now + 2000;
-  state.scorePulseUntil = now + 900;
-  state.lastScorer = scorer;
+  if (opts?.scorePulse) state.scorePulseUntil = now + 900;
+  if (opts?.lastScorer !== undefined) state.lastScorer = opts.lastScorer;
+}
+
+function resetAfterScore(state: GameState, scorer: Side) {
+  const receiving: Side = scorer === "you" ? "opp" : "you";
+  const now = performance.now();
+  // Inbound from the baseline of the hoop that was just scored on.
+  startInbound(
+    state,
+    receiving,
+    scorer === "you",
+    now,
+    scorer === "you" ? "Swish!" : "THEY SCORE! · Your ball",
+    { slowMoMs: 850, scorePulse: true, lastScorer: scorer },
+  );
   const hoopY = scorer === "you" ? 4 : H - 4;
   burstFx(state, 25, hoopY, scorer === "you" ? "#fb923c" : "#60a5fa", 18);
-  burstText(state, 25, hoopY + (scorer === "you" ? 6 : -6), "+2", scorer === "you" ? "#fb923c" : "#93c5fd");
+  burstText(
+    state,
+    25,
+    hoopY + (scorer === "you" ? 6 : -6),
+    "+2",
+    scorer === "you" ? "#fb923c" : "#93c5fd",
+  );
+}
+
+/** Shot-clock violation — other team inbounds from the offensive baseline. */
+function shotClockViolation(state: GameState, violator: Side, now: number) {
+  const receiving: Side = violator === "you" ? "opp" : "you";
+  // Violator was attacking this end — inbound there for the defense.
+  startInbound(
+    state,
+    receiving,
+    violator === "you",
+    now,
+    "Shot clock violation!",
+    { slowMoMs: 500 },
+  );
+  const hoopY = violator === "you" ? 4 : H - 4;
+  burstFx(state, 25, hoopY, "#9ca3af", 12);
+  burstText(state, 25, hoopY + (violator === "you" ? 8 : -8), "VIOLATION", "#f87171");
 }
 
 /** Spots players run toward during the post-score inbound (no teleports). */
@@ -408,11 +478,83 @@ function createState(
     campTimer: 0,
     inbound: null,
     slowMoUntil: 0,
+    quarter: 1,
+    quarterClock: QUARTER_SEC,
+    shotClock: SHOT_CLOCK_SEC,
+    quarterBreakUntil: 0,
   };
 }
 
 function beginSlowMo(state: GameState, now: number, ms: number) {
   state.slowMoUntil = Math.max(state.slowMoUntil, now + ms);
+}
+
+function endGame(state: GameState, now: number) {
+  state.over = true;
+  state.meter.active = false;
+  if (state.youScore === state.oppScore) {
+    state.winner = null;
+    state.message = "Tie game!";
+  } else {
+    state.winner = state.youScore > state.oppScore ? "you" : "opp";
+    state.message = state.winner === "you" ? "You win!" : "They win!";
+  }
+  state.messageUntil = now + 999999;
+}
+
+function possessionSide(state: GameState): Side | null {
+  if (state.ball.ownerId?.startsWith("you")) return "you";
+  if (state.ball.ownerId?.startsWith("opp")) return "opp";
+  if (state.inbound) {
+    const from = state.actors.find((a) => a.id === state.inbound!.fromId);
+    return from?.side ?? null;
+  }
+  return null;
+}
+
+function tickClocks(state: GameState, clockDt: number, now: number) {
+  if (state.over) return;
+  if (now < state.quarterBreakUntil) return;
+
+  state.quarterClock = Math.max(0, state.quarterClock - clockDt);
+
+  // Shot clock only while a team has the ball or is inbound (freeze on loose / flight).
+  const shotTicking = Boolean(state.ball.ownerId) || Boolean(state.inbound);
+  if (shotTicking) {
+    state.shotClock = Math.max(0, state.shotClock - clockDt);
+  }
+
+  if (state.shotClock <= 0 && shotTicking) {
+    const side = possessionSide(state);
+    if (side) {
+      shotClockViolation(state, side, now);
+    }
+  }
+
+  if (state.quarterClock <= 0) {
+    if (state.quarter < REG_QUARTERS) {
+      state.quarter += 1;
+      state.quarterClock = QUARTER_SEC;
+      state.quarterBreakUntil = now + 1800;
+      resetShotClock(state);
+      state.meter.active = false;
+      state.message = `End of Q${state.quarter - 1} · Q${state.quarter}`;
+      state.messageUntil = now + 1800;
+    } else if (state.quarter === REG_QUARTERS) {
+      if (state.youScore === state.oppScore) {
+        state.quarter = 5;
+        state.quarterClock = QUARTER_SEC;
+        state.quarterBreakUntil = now + 1800;
+        resetShotClock(state);
+        state.message = "Overtime!";
+        state.messageUntil = now + 1800;
+      } else {
+        endGame(state, now);
+      }
+    } else {
+      endGame(state, now);
+    }
+  }
 }
 
 export function CourtCallGame({
@@ -431,8 +573,9 @@ export function CourtCallGame({
   const moveRef = useRef({ x: 0, y: 0 });
   const stickRef = useRef({ active: false, nx: 0, ny: 0 });
   const keysRef = useRef(new Set<string>());
-  const actionQueue = useRef<Array<"shoot" | "pass" | "steal" | "block">>([]);
-  const facesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const actionQueue = useRef<
+    Array<"shoot" | "pass" | "steal" | "block" | "rebound">
+  >([]);
   const difficultyRef = useRef<CourtDifficulty>("normal");
   const [difficulty, setDifficulty] = useState<CourtDifficulty>("normal");
   const [hud, setHud] = useState({
@@ -442,6 +585,9 @@ export function CourtCallGame({
     over: false,
     meter: null as null | { t: number; green: number; frozen: boolean },
     slowMo: false,
+    quarter: 1,
+    quarterClock: QUARTER_SEC,
+    shotClock: SHOT_CLOCK_SEC,
   });
   const [isTouch, setIsTouch] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -466,17 +612,10 @@ export function CourtCallGame({
       over: false,
       meter: null,
       slowMo: false,
+      quarter: 1,
+      quarterClock: QUARTER_SEC,
+      shotClock: SHOT_CLOCK_SEC,
     });
-
-    const map = new Map<string, HTMLImageElement>();
-    for (const a of state.actors) {
-      if (map.has(a.faceUrl)) continue;
-      const img = new Image();
-      img.decoding = "async";
-      img.src = `${a.faceUrl}?v=4`;
-      map.set(a.faceUrl, img);
-    }
-    facesRef.current = map;
   }, [you, opp, lockSlot]);
 
   function beginTipOff() {
@@ -490,7 +629,7 @@ export function CourtCallGame({
     burstText(state, 25, state.ball.y - 4, "TIP OFF", "#fff7ed");
   }
 
-  function queueAction(a: "shoot" | "pass" | "steal" | "block") {
+  function queueAction(a: "shoot" | "pass" | "steal" | "block" | "rebound") {
     actionQueue.current.push(a);
   }
 
@@ -507,10 +646,11 @@ export function CourtCallGame({
       }
       keysRef.current.add(k);
       if (e.code === "Space") keysRef.current.add(" ");
-      if (k === "j" || k === " ") queueAction("shoot");
+      if (k === " " || e.code === "Space") queueAction("shoot");
       if (k === "k" || k === "e") queueAction("pass");
-      if (k === "u" || k === "q") queueAction("steal");
-      if (k === "i" || k === "f") queueAction("block");
+      if (k === "g") queueAction("steal");
+      if (k === "f") queueAction("block");
+      if (k === "h") queueAction("rebound");
     };
     const onKeyUp = (e: KeyboardEvent) => {
       keysRef.current.delete(e.key.toLowerCase());
@@ -548,7 +688,8 @@ export function CourtCallGame({
       }
 
       const slowMo = now < state.slowMoUntil;
-      const dt = rawDt * (slowMo ? 0.28 : 1);
+      // Mild slow-mo — enough to read the result, not a crawl.
+      const dt = rawDt * (slowMo ? 0.58 : 1);
 
       let mx = 0;
       let my = 0;
@@ -570,7 +711,10 @@ export function CourtCallGame({
 
       const tuning = difficultyTuning(difficultyRef.current);
       if (!introRef.current && !state.over) {
-        stepGame(state, dt, now, moveRef.current, actionQueue.current, tuning);
+        tickClocks(state, rawDt, now);
+        if (now >= state.quarterBreakUntil) {
+          stepGame(state, dt, now, moveRef.current, actionQueue.current, tuning);
+        }
         actionQueue.current = [];
       } else {
         actionQueue.current = [];
@@ -599,7 +743,7 @@ export function CourtCallGame({
         updateCamera(state, dt);
       }
       if (!state.meter.active) stepFx(state, dt);
-      drawCourt(canvas, state, now, facesRef.current, you, opp, introRef.current);
+      drawCourt(canvas, state, now, you, opp, introRef.current);
       setHud((prev) => {
         const meterVisible =
           state.meter.active || now < state.meter.holdUntil;
@@ -616,6 +760,9 @@ export function CourtCallGame({
               }
             : null,
           slowMo,
+          quarter: state.quarter,
+          quarterClock: state.quarterClock,
+          shotClock: state.shotClock,
         };
         if (
           prev.you === next.you &&
@@ -626,7 +773,10 @@ export function CourtCallGame({
           prev.meter?.green === next.meter?.green &&
           prev.meter?.frozen === next.meter?.frozen &&
           Boolean(prev.meter) === Boolean(next.meter) &&
-          prev.slowMo === next.slowMo
+          prev.slowMo === next.slowMo &&
+          prev.quarter === next.quarter &&
+          prev.quarterClock === next.quarterClock &&
+          prev.shotClock === next.shotClock
         ) {
           return prev;
         }
@@ -655,25 +805,51 @@ export function CourtCallGame({
           <span className="mx-2 text-[var(--muted)]">–</span>
           <span>{hud.opp}</span>
         </div>
-        <p className="max-w-[40%] truncate text-right text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-          {you.year} {you.team.abbreviation} vs {opp.year} {opp.team.abbreviation}
-        </p>
+        <div className="flex min-w-14 flex-col items-end leading-tight">
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
+            {hud.quarter > REG_QUARTERS ? "OT" : `Q${hud.quarter}`}
+          </span>
+          <span className="font-[family-name:var(--font-display)] text-sm text-[var(--ink)]">
+            {formatClock(hud.quarterClock)}
+          </span>
+        </div>
       </header>
 
-      <div className="relative mx-auto mt-2 w-full max-w-lg flex-1 overflow-hidden px-2">
+      {/* Matchup lives above the court — not painted on the canvas. */}
+      <p className="mx-auto mt-2 flex w-full max-w-lg items-center justify-center gap-3 px-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
+        <span className="text-[var(--orange-hot)]">
+          {you.year} {you.team.abbreviation}
+        </span>
+        <span className="text-[var(--ink)]">
+          {hud.you}–{hud.opp}
+        </span>
+        <span className="text-sky-300">
+          {opp.year} {opp.team.abbreviation}
+        </span>
+        {!intro ? (
+          <span
+            className={`ml-1 rounded-full border px-2 py-0.5 tabular-nums tracking-[0.12em] ${
+              hud.shotClock <= 6
+                ? "border-red-400/50 text-red-300"
+                : "border-[var(--line)] text-[var(--muted)]"
+            }`}
+          >
+            {Math.ceil(Math.max(0, hud.shotClock))}
+          </span>
+        ) : null}
+      </p>
+
+      <div className="relative mx-auto mt-1.5 w-full max-w-lg overflow-hidden px-2">
         <canvas
           ref={canvasRef}
-          className="h-auto max-h-[min(70vh,34rem)] w-full touch-none rounded-xl border border-[var(--line)] bg-[#1a120c]"
+          className="h-auto max-h-[min(52vh,28rem)] w-full touch-none rounded-xl border border-[var(--line)] bg-[#1a120c] sm:max-h-[min(62vh,34rem)]"
           style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
         />
 
         {intro ? (
-          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between rounded-xl px-3 py-4 text-center">
-            <div className="w-full">
-              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#fdba74] drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
-                Court Call · tip off
-              </p>
-              <p className="mt-1 font-[family-name:var(--font-display)] text-3xl tracking-wide text-[#fff7ed] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] sm:text-4xl">
+          <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-xl px-3 py-4 text-center">
+            <div className="animate-tipoff-fly flex h-full flex-col items-center justify-center gap-4 pb-16">
+              <p className="font-[family-name:var(--font-display)] text-3xl tracking-wide text-[#fff7ed] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] sm:text-4xl">
                 <span className="text-[#fb923c]">
                   {you.year} {you.team.abbreviation}
                 </span>
@@ -682,26 +858,14 @@ export function CourtCallGame({
                   {opp.year} {opp.team.abbreviation}
                 </span>
               </p>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <p className="animate-bounce text-4xl text-[#fb923c] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">
-                ▲
-              </p>
               <p className="font-[family-name:var(--font-display)] text-2xl tracking-wide text-[#fdba74] drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]">
                 You attack this way
-              </p>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#ffedd5] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-                First to {WIN_SCORE}
-              </p>
-              <p className="mt-2 text-[11px] font-semibold text-[#fdba74] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-                Locked · {lockSlot}{" "}
-                {you.lineup[lockSlot]?.playerName ?? ""}
               </p>
             </div>
             <button
               type="button"
               onClick={beginTipOff}
-              className="pointer-events-auto animate-pulse rounded-2xl border-2 border-[#fb923c] bg-[#ea580c]/85 px-8 py-3 font-[family-name:var(--font-display)] text-2xl tracking-wide text-[#fff7ed] shadow-[0_0_28px_rgba(249,115,22,0.55)]"
+              className="pointer-events-auto absolute bottom-4 left-1/2 z-30 -translate-x-1/2 animate-tipoff-fade rounded-2xl border-2 border-[#fb923c] bg-[#ea580c]/85 px-8 py-3 font-[family-name:var(--font-display)] text-2xl tracking-wide text-[#fff7ed] shadow-[0_0_28px_rgba(249,115,22,0.55)]"
             >
               Let&apos;s ball
             </button>
@@ -733,7 +897,11 @@ export function CourtCallGame({
         {hud.over ? (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-black/75 px-4">
             <p className="font-[family-name:var(--font-display)] text-4xl tracking-wide text-[var(--orange-hot)]">
-              {hud.you > hud.opp ? "You win" : "You lose"}
+              {hud.you === hud.opp
+                ? "Tie game"
+                : hud.you > hud.opp
+                  ? "You win"
+                  : "You lose"}
             </p>
             <p className="text-sm text-[var(--muted)]">
               Final {hud.you}–{hud.opp}
@@ -747,50 +915,52 @@ export function CourtCallGame({
             </button>
           </div>
         ) : null}
+      </div>
 
-        {/* Difficulty — right side */}
-        {!hud.over && !intro ? (
-          <div className="absolute right-2 top-16 z-10 flex flex-col gap-1.5">
+      {/* Controls dock under the court — keeps the play surface clear. */}
+      {!hud.over && !intro ? (
+        <div className="mx-auto mt-2 flex w-full max-w-lg flex-col gap-2 px-3 pb-1">
+          <div className="flex items-center justify-center gap-2">
             {(["easy", "normal", "hard"] as const).map((level) => (
               <button
                 key={level}
                 type="button"
                 onClick={() => setDifficulty(level)}
-                className={`rounded-full border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
                   difficulty === level
                     ? "border-[var(--orange)] bg-[var(--orange)]/30 text-[var(--ink)]"
-                    : "border-[var(--line)] bg-black/55 text-[var(--muted)]"
+                    : "border-[var(--line)] bg-black/40 text-[var(--muted)]"
                 }`}
               >
                 {COURT_DIFFICULTY_LABELS[level]}
               </button>
             ))}
           </div>
-        ) : null}
 
-        <Joystick
-          visible={isTouch && !hud.over && !intro}
-          onChange={(nx, ny, active) => {
-            stickRef.current = { active, nx, ny };
-          }}
-        />
+          {isTouch ? (
+            <div className="flex items-end justify-between gap-3 pb-1 pt-1">
+              <Joystick
+                visible
+                onChange={(nx, ny, active) => {
+                  stickRef.current = { active, nx, ny };
+                }}
+              />
+              <div className="grid w-[9.5rem] grid-cols-3 grid-rows-3 gap-1.5">
+                <ActionBtn label="Steal" onPress={() => queueAction("steal")} />
+                <ActionBtn label="Block" onPress={() => queueAction("block")} />
+                <ActionBtn label="Board" onPress={() => queueAction("rebound")} />
+                <span />
+                <ActionBtn label="Shoot" onPress={() => queueAction("shoot")} />
+                <span />
+                <span />
+                <ActionBtn label="Pass" onPress={() => queueAction("pass")} />
+                <span />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
-        {isTouch && !hud.over && !intro ? (
-          <div className="absolute bottom-16 right-3 z-10 grid w-[9.5rem] grid-cols-3 grid-rows-3 gap-1.5">
-            <span />
-            <ActionBtn label="Block" sub="Reb" onPress={() => queueAction("block")} />
-            <span />
-            <ActionBtn label="Steal" onPress={() => queueAction("steal")} />
-            <span />
-            <ActionBtn label="Shoot" onPress={() => queueAction("shoot")} />
-            <span />
-            <ActionBtn label="Pass" onPress={() => queueAction("pass")} />
-            <span />
-          </div>
-        ) : null}
-      </div>
-
-      {/* Bottom info control (replaces raw controls text) */}
       <div className="mx-auto flex w-full max-w-lg items-center justify-center gap-3 px-4 pb-3 pt-2">
         <button
           type="button"
@@ -802,12 +972,9 @@ export function CourtCallGame({
           i
         </button>
         <p className="text-[11px] text-[var(--muted)]">
-          Difficulty:{" "}
-          <span className="font-bold text-[var(--ink)]">
-            {COURT_DIFFICULTY_LABELS[difficulty]}
-          </span>
-          {" · "}
-          Tap i for controls
+          {isTouch
+            ? "Controls under the court · tap i for tips"
+            : `WASD move · Space shoot · K pass · F block · G steal · H board · ${COURT_DIFFICULTY_LABELS[difficulty]}`}
         </p>
       </div>
 
@@ -965,7 +1132,7 @@ function Joystick({
   return (
     <div
       ref={baseRef}
-      className="absolute bottom-16 left-3 z-10 h-28 w-28 touch-none rounded-full border border-[var(--line)] bg-black/45"
+      className="relative z-10 h-28 w-28 shrink-0 touch-none rounded-full border border-[var(--line)] bg-black/45"
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
         update(e.clientX, e.clientY, true);
@@ -1015,8 +1182,11 @@ function stepInbound(state: GameState, now: number) {
       ib.catchAt = now + 950;
       state.message = "Inbound";
       state.messageUntil = now + 1200;
+    } else if (state.lastScorer === "you") {
+      state.message = "Swish!";
+      state.messageUntil = Math.max(state.messageUntil, now + 400);
     } else {
-      state.message = "Bringing it in";
+      state.message = "Inbound coming";
       state.messageUntil = Math.max(state.messageUntil, now + 400);
     }
     return;
@@ -1064,7 +1234,7 @@ function stepGame(
   dt: number,
   now: number,
   move: { x: number; y: number },
-  actions: Array<"shoot" | "pass" | "steal" | "block">,
+  actions: Array<"shoot" | "pass" | "steal" | "block" | "rebound">,
   tuning: ReturnType<typeof difficultyTuning>,
 ) {
   // After a make: everyone runs to inbound spots — no teleports.
@@ -1161,7 +1331,7 @@ function stepGame(
     a.vx *= 0.86;
     a.vy *= 0.86;
   }
-  separateActors(state.actors);
+  separateActors(state.actors, state.ball.ownerId);
 
   const owner = state.ball.ownerId
     ? state.actors.find((a) => a.id === state.ball.ownerId)
@@ -1192,10 +1362,13 @@ function stepGame(
   } else if (state.ball.inAir) {
     state.ball.x += state.ball.vx * dt;
     state.ball.y += state.ball.vy * dt;
-    state.ball.vx *= 0.997;
-    state.ball.vy *= 0.997;
+    // Keep shot velocity steady so flight time matches the launch math.
+    if (!state.ball.targetBasket) {
+      state.ball.vx *= 0.997;
+      state.ball.vy *= 0.997;
+    }
     const basketY = state.ball.targetBasket === "opp" ? 4 : H - 4;
-    if (dist(state.ball.x, state.ball.y, 25, basketY) < 2.2) {
+    if (dist(state.ball.x, state.ball.y, 25, basketY) < SHOT_HIT_RADIUS) {
       resolveShot(state, now, tuning);
     } else if (
       state.ball.x < 0 ||
@@ -1226,23 +1399,21 @@ function stepGame(
     handleAction(state, action, now, tuning);
   }
 
-  if (state.youScore >= WIN_SCORE || state.oppScore >= WIN_SCORE) {
-    state.over = true;
-    state.winner = state.youScore > state.oppScore ? "you" : "opp";
-    state.message = state.winner === "you" ? "You win!" : "They win!";
-    state.messageUntil = now + 999999;
-    state.meter.active = false;
-  }
 }
 
 function applySpacingSteer(state: GameState, a: Actor, dt: number) {
+  // Ball handler shouldn't get shoved sideways by sticky defenders.
+  if (state.ball.ownerId === a.id) return;
   for (const other of state.actors) {
     if (other.id === a.id) continue;
     const dx = a.x - other.x;
     const dy = a.y - other.y;
     const d = Math.hypot(dx, dy) || 0.01;
     if (d < MIN_SEPARATION * 1.15) {
-      const force = ((MIN_SEPARATION * 1.15 - d) / MIN_SEPARATION) * 40 * dt;
+      // Ease off when the other guy has the ball so drives can slip through.
+      const againstHandler = state.ball.ownerId === other.id ? 0.45 : 1;
+      const force =
+        ((MIN_SEPARATION * 1.15 - d) / MIN_SEPARATION) * 36 * dt * againstHandler;
       a.vx += (dx / d) * force;
       a.vy += (dy / d) * force;
     }
@@ -1261,57 +1432,83 @@ function actorPhase(a: Actor, now: number): number {
   return (now / 1000) * (0.7 + (h % 7) * 0.12) + (h % 100) * 0.07;
 }
 
-/** Active off-ball cuts / spot-ups toward the attack basket. */
+/** Active off-ball cuts, screens, and spot-ups toward the attack basket. */
 function offenseSpot(
   a: Actor,
   ballOwner: Actor | null,
   now: number,
+  state: GameState,
 ): { x: number; y: number } {
-  const attackY = a.side === "you" ? 10 : H - 10;
-  const wingY = a.side === "you" ? 28 : H - 28;
-  const elbowY = a.side === "you" ? 38 : H - 38;
+  const attackY = a.side === "you" ? 9 : H - 9;
+  const wingY = a.side === "you" ? 26 : H - 26;
+  const elbowY = a.side === "you" ? 36 : H - 36;
   const phase = actorPhase(a, now);
-  const mode = Math.floor(phase) % 4;
-  const wobble = Math.sin(phase * 2.1) * 3.5;
+  // Faster role cycling so they cut / screen / space like a live offense.
+  const mode = Math.floor(phase * 1.35) % 5;
+  const wobble = Math.sin(phase * 2.4) * 3.2;
   const lane = slotLaneX(a.slot);
+  const towardRim = a.side === "you" ? -1 : 1;
 
   if (a.slot === "C") {
+    // Big: duck-in, seal, or set a ball screen.
+    if (mode <= 1 && ballOwner) {
+      const stopper = onBallDefender(state, ballOwner);
+      if (stopper) {
+        return {
+          x: clamp(stopper.x + (ballOwner.x - stopper.x) * 0.35 + wobble * 0.3, 8, W - 8),
+          y: clamp(stopper.y + towardRim * 1.2, 6, H - 6),
+        };
+      }
+    }
     return {
-      x: clamp(25 + wobble * 0.6, 10, 40),
-      y: clamp(attackY + (a.side === "you" ? 8 : -8) + Math.cos(phase) * 2, 6, H - 6),
+      x: clamp(25 + wobble * 0.7, 10, 40),
+      y: clamp(attackY + (a.side === "you" ? 7 : -7) + Math.cos(phase) * 2.5, 6, H - 6),
     };
   }
+
   if (mode === 0) {
-    // Cut to rim
+    // Hard cut to the rim
     return {
-      x: clamp(lane + wobble, 7, W - 7),
-      y: clamp(attackY + Math.sin(phase) * 2, 6, H - 6),
+      x: clamp(25 + (lane - 25) * 0.35 + wobble * 0.5, 7, W - 7),
+      y: clamp(attackY + Math.sin(phase) * 1.5, 5, H - 5),
     };
   }
   if (mode === 1) {
-    // Wing spot-up
+    // Wing spot-up / spacing
     return {
-      x: clamp(lane + (lane < 25 ? -2 : 2) + wobble * 0.4, 6, W - 6),
-      y: clamp(wingY + Math.cos(phase * 1.3) * 3, 8, H - 8),
+      x: clamp(lane + (lane < 25 ? -3 : 3) + wobble * 0.4, 5, W - 5),
+      y: clamp(wingY + Math.cos(phase * 1.4) * 3.5, 8, H - 8),
     };
   }
-  if (mode === 2) {
-    // Flash to ball for a pass
-    if (ballOwner) {
+  if (mode === 2 && ballOwner) {
+    // Flash to the ball for a handoff / kick-out
+    return {
+      x: clamp(ballOwner.x + (lane - 25) * 0.5 + wobble, 6, W - 6),
+      y: clamp(
+        ballOwner.y + towardRim * -6 + Math.sin(phase) * 2,
+        6,
+        H - 6,
+      ),
+    };
+  }
+  if (mode === 3 && ballOwner) {
+    // Set a screen on the on-ball defender
+    const stopper = onBallDefender(state, ballOwner);
+    if (stopper) {
+      const dx = ballOwner.x - stopper.x;
+      const dy = ballOwner.y - stopper.y;
+      const m = Math.hypot(dx, dy) || 1;
+      // Plant next to the defender, toward the ball — classic ball-screen angle.
       return {
-        x: clamp(ballOwner.x + (lane - 25) * 0.55 + wobble, 6, W - 6),
-        y: clamp(
-          ballOwner.y + (a.side === "you" ? -7 : 7) + Math.sin(phase) * 2,
-          6,
-          H - 6,
-        ),
+        x: clamp(stopper.x + (dx / m) * 1.4 + (-dy / m) * 1.1, 6, W - 6),
+        y: clamp(stopper.y + (dy / m) * 1.4 + (dx / m) * 1.1, 6, H - 6),
       };
     }
   }
-  // Elbow / high post
+  // Elbow / high post / curl
   return {
-    x: clamp(lane * 0.55 + 25 * 0.45 + wobble * 0.5, 8, W - 8),
-    y: clamp(elbowY + Math.sin(phase * 1.7) * 4, 10, H - 10),
+    x: clamp(lane * 0.5 + 25 * 0.5 + wobble * 0.6, 8, W - 8),
+    y: clamp(elbowY + Math.sin(phase * 1.8) * 4.5, 10, H - 10),
   };
 }
 
@@ -1322,9 +1519,17 @@ function manAssignment(a: Actor, state: GameState): Actor | null {
   );
 }
 
+function onBallDefender(state: GameState, ballOwner: Actor): Actor | null {
+  return (
+    state.actors.find(
+      (d) => d.side !== ballOwner.side && manAssignment(d, state)?.id === ballOwner.id,
+    ) ?? null
+  );
+}
+
 /**
- * Man-to-man: stay with your assignment, shade toward the basket you defend.
- * On-ball: clamp between them and the rim. Off-ball: deny + slight ball help.
+ * Man-to-man shade between the assignment and the basket.
+ * Intentionally lags movers so handlers can juke / blow by.
  */
 function defenseSpot(
   a: Actor,
@@ -1334,43 +1539,38 @@ function defenseSpot(
 ): { x: number; y: number } {
   const phase = actorPhase(a, now);
   const basketY = a.side === "you" ? H - 4 : 4;
-  const towardBasket = a.side === "you" ? 1 : -1;
   const onBall = ballOwner?.id === assignment.id;
-  const wobbleX = Math.sin(phase * 2.8) * (onBall ? 0.55 : 1.1);
-  const wobbleY = Math.cos(phase * 2.1) * (onBall ? 0.35 : 0.9);
+  const manSpeed = Math.hypot(assignment.vx, assignment.vy);
 
-  if (onBall) {
-    // Between handler and the hoop — tight clamp.
-    const gap = stateCampGap(assignment, a.side);
-    return {
-      x: clamp(
-        assignment.x * 0.78 + 25 * 0.22 + wobbleX,
-        4,
-        W - 4,
-      ),
-      y: clamp(assignment.y + towardBasket * gap + wobbleY, 4, H - 4),
-    };
+  // Reaction lag — faster movers get defenders crossed up.
+  const lag = onBall ? 0.22 + Math.min(0.28, manSpeed * 0.018) : 0.1;
+  const predX = assignment.x - assignment.vx * lag;
+  const predY = assignment.y - assignment.vy * lag;
+
+  const toBx = 25 - predX;
+  const toBy = basketY - predY;
+  const toB = Math.hypot(toBx, toBy) || 1;
+  // Comfortable cushion — never sit on top of the ball.
+  const cushion = onBall ? (manSpeed < 3 ? 3.4 : 4.2) : 2.9;
+  const wobbleX = Math.sin(phase * 2.2) * (onBall ? 0.7 : 1.3);
+  const wobbleY = Math.cos(phase * 1.7) * (onBall ? 0.45 : 1.0);
+
+  let x = predX + (toBx / toB) * cushion + wobbleX;
+  let y = predY + (toBy / toB) * cushion + wobbleY;
+
+  // Blown by: man is closer to the rim than we are — recover to the paint.
+  const manToRim = dist(assignment.x, assignment.y, 25, basketY);
+  const meToRim = dist(a.x, a.y, 25, basketY);
+  if (manToRim < meToRim - 1.2) {
+    x = assignment.x * 0.35 + 25 * 0.65;
+    y = assignment.y * 0.4 + basketY * 0.6;
+  } else if (!onBall && ballOwner) {
+    // Off-ball: stay with man, light ball help — don't leave the cut.
+    x = x * 0.78 + ballOwner.x * 0.12 + assignment.x * 0.1;
+    y = y * 0.82 + assignment.y * 0.18;
   }
 
-  // Off-ball: stay with man, slight shade to ball and basket.
-  let x = assignment.x + wobbleX;
-  let y = assignment.y + towardBasket * 2.4 + wobbleY;
-  if (ballOwner) {
-    x = x * 0.82 + ballOwner.x * 0.18;
-    y = y * 0.88 + ((assignment.y + ballOwner.y) / 2) * 0.12;
-  }
-  // Don't abandon the paint entirely if your man cuts baseline.
-  const paintPull = clamp((basketY - y) * 0.08, -1.5, 1.5);
-  y += paintPull;
-  return { x: clamp(x, 4, W - 4), y: clamp(y, 4, H - 4) };
-}
-
-function stateCampGap(assignment: Actor, side: Side) {
-  // Tighter when the handler is slow / camping near you.
-  const speed = Math.hypot(assignment.vx, assignment.vy);
-  const base = speed < 3.5 ? 2.0 : 2.6;
-  void side;
-  return base;
+  return { x: clamp(x, 3.5, W - 3.5), y: clamp(y, 3.5, H - 3.5) };
 }
 
 /** How many defenders are glued to the ball handler (for meter + steals). */
@@ -1442,6 +1642,7 @@ function tryGrabLooseBall(state: GameState, now: number) {
   state.ball.vy = 0;
   state.ball.x = best.a.x;
   state.ball.y = best.a.y;
+  resetShotClock(state);
   state.message = `${best.a.lastName} boards!`;
   state.messageUntil = now + 900;
   burstFx(state, best.a.x, best.a.y, best.a.side === "you" ? "#fb923c" : "#60a5fa", 10);
@@ -1479,10 +1680,19 @@ function tryAerialContest(
       state.messageUntil = now + 1800;
       burstFx(state, a.x, a.y, "#93c5fd", 14);
       burstText(state, a.x, a.y - 3, "BLOCK", "#93c5fd");
-      if (shooter?.id === state.controlId) beginSlowMo(state, now, 2000);
+      if (shooter?.id === state.controlId) beginSlowMo(state, now, 900);
       return;
     }
   }
+}
+
+function nearestFoeDist(state: GameState, a: Actor): number {
+  let best = 99;
+  for (const o of state.actors) {
+    if (o.side === a.side) continue;
+    best = Math.min(best, dist(a.x, a.y, o.x, o.y));
+  }
+  return best;
 }
 
 function aiThink(
@@ -1494,6 +1704,7 @@ function aiThink(
 ) {
   const hasBall = state.ball.ownerId === a.id && !state.ball.loose;
   const attackBasketY = a.side === "you" ? 4 : H - 4;
+  const defendBasketY = a.side === "you" ? H - 4 : 4;
   const spd = 15 * tuning.aiSpeed;
   const ballOwner =
     state.ball.ownerId && !state.ball.loose
@@ -1510,23 +1721,56 @@ function aiThink(
   }
 
   if (hasBall && !state.ball.inAir) {
-    // Drive / probe with some lateral juke, then shoot or kick.
     const phase = actorPhase(a, now);
-    const juke = Math.sin(phase * 2.6) * 4;
-    const targetX = clamp(25 + juke, 8, W - 8);
-    const targetY = attackBasketY + (a.side === "you" ? 10 : -10);
-    steerTo(a, targetX, targetY, dt, spd * 8);
-    if (dist(a.x, a.y, 25, attackBasketY) < 17 && Math.random() < dt * 0.85 * tuning.aiSpeed) {
-      launchShot(state, a, 0.5 + (Math.random() - 0.5) * 0.22);
-    } else if (Math.random() < dt * 0.35) {
+    const attackMode = Math.floor(phase * 0.55) % 4;
+    const gap = nearestFoeDist(state, a);
+    const rimY = attackBasketY + (a.side === "you" ? 9 : -9);
+    let targetX: number;
+    let targetY: number;
+    if (attackMode === 0 || gap > 3.8) {
+      // Explode to the rim / blow-by lane
+      targetX = clamp(25 + Math.sin(phase * 3.1) * 2.5, 10, W - 10);
+      targetY = rimY;
+    } else if (attackMode === 1) {
+      // Drive the slot lane
+      targetX = clamp(slotLaneX(a.slot) + Math.sin(phase * 2) * 2, 7, W - 7);
+      targetY = rimY + (a.side === "you" ? 4 : -4);
+    } else if (attackMode === 2) {
+      // Hesitation juke, then attack
+      targetX = clamp(a.x + Math.sin(phase * 5.5) * 7, 6, W - 6);
+      targetY = clamp(a.y + (a.side === "you" ? -3 : 3), 6, H - 6);
+    } else {
+      // Attack middle off a screen angle
+      targetX = clamp(25 + Math.cos(phase * 2.2) * 5, 9, W - 9);
+      targetY = rimY + (a.side === "you" ? 6 : -6);
+    }
+    const driveAccel = gap > 3.5 ? spd * 11.5 : spd * 8.5;
+    steerTo(a, targetX, targetY, dt, driveAccel);
+
+    const rimDist = dist(a.x, a.y, 25, attackBasketY);
+    // Shoot a lot more — paint, midrange, and pull-ups.
+    const shootRate =
+      rimDist < 11
+        ? 2.6
+        : rimDist < 16
+          ? 1.9
+          : rimDist < 22
+            ? 1.15
+            : rimDist < 28
+              ? 0.55
+              : 0.12;
+    if (Math.random() < dt * shootRate * tuning.aiSpeed) {
+      launchShot(state, a, 0.48 + (Math.random() - 0.5) * 0.28);
+    } else if (Math.random() < dt * 0.22) {
       const mates = state.actors
         .filter((t) => t.side === a.side && t.id !== a.id)
         .sort(
           (p, q) =>
-            dist(q.x, q.y, 25, attackBasketY) - dist(p.x, p.y, 25, attackBasketY),
+            dist(p.x, p.y, 25, attackBasketY) - dist(q.x, q.y, 25, attackBasketY),
         );
-      const target = mates[0];
-      if (target && dist(a.x, a.y, target.x, target.y) < 22) {
+      // Prefer cutters near the rim
+      const target = mates.find((m) => dist(m.x, m.y, 25, attackBasketY) < 16) ?? mates[0];
+      if (target && dist(a.x, a.y, target.x, target.y) < 24) {
         doPass(state, a, target);
       }
     }
@@ -1535,7 +1779,6 @@ function aiThink(
   }
 
   if (state.ball.inAir) {
-    // Crash the glass / contest the shot.
     const crashX = state.ball.x + (slotLaneX(a.slot) - 25) * 0.2;
     const crashY = state.ball.y + (a.side === "you" ? 1.5 : -1.5);
     steerTo(a, crashX, crashY, dt, 15 * tuning.aiSpeed * 8);
@@ -1544,57 +1787,73 @@ function aiThink(
   }
 
   if (teamHasBall) {
-    const spot = offenseSpot(a, ballOwner, now);
-    steerTo(a, spot.x, spot.y, dt, spd * 6.5);
+    const spot = offenseSpot(a, ballOwner, now, state);
+    // Cutters sprint; screeners plant a bit slower.
+    const cutting = dist(spot.x, spot.y, 25, attackBasketY) < 14;
+    steerTo(a, spot.x, spot.y, dt, spd * (cutting ? 9.2 : 7.2));
   } else if (ballOwner) {
     const assignment = manAssignment(a, state);
     if (!assignment) {
       applySpacingSteer(state, a, dt);
       return;
     }
-    const onBall = assignment.id === ballOwner.id;
-    const campBoost =
-      ballOwner.side === "you" && onBall
-        ? 1 + Math.min(1.8, state.campTimer * 0.4)
-        : 1;
-    const spot = defenseSpot(a, assignment, ballOwner, now);
-    steerTo(a, spot.x, spot.y, dt, spd * (onBall ? 8.2 : 6.4) * campBoost);
 
-    // Steals: on-ball man + help when the handler is blanketed.
+    // Transition D — sprint back if still stuck in the frontcourt.
+    const inFrontcourt =
+      a.side === "you" ? a.y < H * 0.48 : a.y > H * 0.52;
+    const ballAttackingUs =
+      a.side === "you" ? ballOwner.y > H * 0.42 : ballOwner.y < H * 0.58;
+    if (inFrontcourt && ballAttackingUs) {
+      const recoverY =
+        a.side === "you"
+          ? Math.max(assignment.y, ballOwner.y, H * 0.58)
+          : Math.min(assignment.y, ballOwner.y, H * 0.42);
+      steerTo(a, assignment.x * 0.7 + 25 * 0.3, recoverY, dt, spd * 12);
+      applySpacingSteer(state, a, dt);
+      return;
+    }
+
+    const onBall = assignment.id === ballOwner.id;
+    const camping =
+      ballOwner.side === "you" &&
+      state.campTimer > 1.6;
+    const blownBy =
+      dist(assignment.x, assignment.y, 25, defendBasketY) <
+      dist(a.x, a.y, 25, defendBasketY) - 1.2;
+    const spot = defenseSpot(a, assignment, ballOwner, now);
+    // Chase hard when beaten; stay patient on-ball so jukes work.
+    const defAccel = blownBy
+      ? spd * 11
+      : onBall
+        ? spd * 6.2
+        : spd * 7.4;
+    steerTo(a, spot.x, spot.y, dt, defAccel);
+
+    // Steals — rarer unless the handler is camping AFK.
     const pressure = defensePressure(state, ballOwner);
     const myDist = dist(a.x, a.y, state.ball.x, state.ball.y);
-    const heavy = pressure.veryClose >= 2 || pressure.close >= 3;
-    const stealReach = onBall
-      ? heavy
-        ? STEAL_REACH + 0.15
-        : STEAL_REACH
-      : heavy
-        ? STEAL_REACH
-        : STEAL_REACH - 0.25;
-    if (myDist < stealReach) {
-      const baseRate = onBall ? 0.28 : heavy ? 0.2 : 0.06;
-      const pressureBonus =
-        pressure.veryClose * 0.14 +
-        pressure.close * 0.06 +
-        (heavy ? 0.35 : 0) +
-        (ballOwner.side === "you" ? state.campTimer * 0.1 : 0);
-      const stealRate = (baseRate + pressureBonus) * tuning.aiSpeed;
+    const camp = ballOwner.side === "you" ? state.campTimer : 0;
+    const stealReach = (onBall ? STEAL_REACH - 0.15 : STEAL_REACH - 0.35) + (camp > 2 ? 0.25 : 0);
+    if (myDist < stealReach && !blownBy) {
+      const baseRate = onBall ? 0.18 : 0.05;
+      const stealRate =
+        (baseRate + Math.min(1.2, camp * 0.35) + (camping ? 0.4 : 0)) *
+        tuning.aiSpeed;
       if (Math.random() < dt * stealRate) {
         const chance = clamp(
-          (a.defense - ballOwner.pass) / 110 +
+          (a.defense - ballOwner.pass) / 140 +
             0.08 +
-            pressure.veryClose * 0.07 +
-            (heavy ? 0.18 : 0) +
-            (ballOwner.side === "you" ? state.campTimer * 0.05 : 0),
-          0.1,
-          0.72,
+            pressure.veryClose * 0.05 +
+            Math.min(0.4, camp * 0.12),
+          0.08,
+          camp > 2.8 ? 0.7 : 0.38,
         );
         if (Math.random() < chance) {
           state.ball.ownerId = a.id;
           state.campTimer = 0;
-          state.message = heavy
-            ? `${a.lastName} strips it!`
-            : `${a.lastName} steals!`;
+          resetShotClock(state);
+          state.message =
+            camp > 2 ? `${a.lastName} takes it!` : `${a.lastName} steals!`;
           state.messageUntil = now + 1000;
           burstFx(state, a.x, a.y, "#34d399", 14);
           burstText(state, a.x, a.y - 3, "STEAL", "#34d399");
@@ -1602,15 +1861,15 @@ function aiThink(
       }
     }
   } else {
-    const spot = offenseSpot(a, null, now);
-    steerTo(a, spot.x, spot.y, dt, spd * 5);
+    const spot = offenseSpot(a, null, now, state);
+    steerTo(a, spot.x, spot.y, dt, spd * 5.5);
   }
   applySpacingSteer(state, a, dt);
 }
 
 function handleAction(
   state: GameState,
-  action: "shoot" | "pass" | "steal" | "block",
+  action: "shoot" | "pass" | "steal" | "block" | "rebound",
   now: number,
   tuning: ReturnType<typeof difficultyTuning>,
 ) {
@@ -1691,10 +1950,6 @@ function handleAction(
 
   if (action === "steal") {
     if (state.meter.active) return;
-    if (state.ball.loose) {
-      tryPlayerRebound(state, me, now);
-      return;
-    }
     if (state.ball.ownerId?.startsWith("opp-") && !state.ball.inAir) {
       const handler = state.actors.find((a) => a.id === state.ball.ownerId)!;
       // Measure to the live ball, not just the body — must be next to it.
@@ -1707,6 +1962,7 @@ function handleAction(
         );
         if (Math.random() < chance) {
           state.ball.ownerId = me.id;
+          resetShotClock(state);
           state.message = "STEAL!";
           state.messageUntil = now + 1000;
           burstFx(state, me.x, me.y, "#34d399", 16);
@@ -1723,12 +1979,19 @@ function handleAction(
     return;
   }
 
-  if (action === "block") {
+  if (action === "rebound") {
     if (state.meter.active) return;
     if (state.ball.loose) {
       tryPlayerRebound(state, me, now);
-      return;
+    } else {
+      state.message = "Ball isn't loose";
+      state.messageUntil = now + 500;
     }
+    return;
+  }
+
+  if (action === "block") {
+    if (state.meter.active) return;
     if (state.ball.inAir) {
       const d = dist(me.x, me.y, state.ball.x, state.ball.y);
       if (d < BLOCK_REACH) {
@@ -1794,6 +2057,7 @@ function tryPlayerRebound(state: GameState, me: Actor, now: number) {
   state.ball.vy = 0;
   state.ball.x = me.x;
   state.ball.y = me.y;
+  resetShotClock(state);
   state.message = "BOARD!";
   state.messageUntil = now + 900;
   burstFx(state, me.x, me.y, "#fdba74", 14);
@@ -1862,7 +2126,9 @@ function launchShot(state: GameState, shooter: Actor, timing: number) {
   const dx = 25 - shooter.x;
   const dy = basketY - shooter.y;
   const m = Math.hypot(dx, dy) || 1;
-  const speed = 18;
+  // Cover distance to the hit radius in a fixed sim-time so every shot feels equal.
+  const travel = Math.max(1.2, m - SHOT_HIT_RADIUS * 0.85);
+  const speed = travel / SHOT_FLIGHT_SEC;
   state.ball.inAir = true;
   state.ball.loose = false;
   state.ball.ownerId = null;
@@ -1876,9 +2142,9 @@ function launchShot(state: GameState, shooter: Actor, timing: number) {
   state.ball.x = shooter.x;
   state.ball.y = shooter.y;
   state.meter.active = false;
-  // Your shot — slow the world so flight + result are readable.
+  // Your shot — brief slow-mo sized for the fixed flight window.
   if (shooter.id === state.controlId) {
-    beginSlowMo(state, performance.now(), 2600);
+    beginSlowMo(state, performance.now(), 1200);
   }
 }
 
@@ -1951,7 +2217,7 @@ function resolveShot(
     state.messageUntil = now + (wasYourShot ? 2200 : 1100);
     burstFx(state, 25, basketY, "#fbbf24", 12);
     burstText(state, 25, basketY - 2, "MISS", "#fbbf24");
-    if (wasYourShot) beginSlowMo(state, now, 2200);
+    if (wasYourShot) beginSlowMo(state, now, 1000);
   }
 }
 
@@ -1978,7 +2244,7 @@ function stepFx(state: GameState, dt: number) {
   state.fx = state.fx.filter((p) => p.life > 0);
 }
 
-function separateActors(actors: Actor[]) {
+function separateActors(actors: Actor[], ballOwnerId: string | null = null) {
   for (let pass = 0; pass < 6; pass++) {
     for (let i = 0; i < actors.length; i++) {
       for (let j = i + 1; j < actors.length; j++) {
@@ -1993,22 +2259,34 @@ function separateActors(actors: Actor[]) {
           d = Math.hypot(dx, dy);
         }
         if (d >= MIN_SEPARATION) continue;
-        const push = (MIN_SEPARATION - d) / 2;
         const nx = dx / d;
         const ny = dy / d;
-        a.x = clamp(a.x - nx * push, PLAYER_R + 0.4, W - PLAYER_R - 0.4);
-        a.y = clamp(a.y - ny * push, PLAYER_R + 0.4, H - PLAYER_R - 0.4);
-        b.x = clamp(b.x + nx * push, PLAYER_R + 0.4, W - PLAYER_R - 0.4);
-        b.y = clamp(b.y + ny * push, PLAYER_R + 0.4, H - PLAYER_R - 0.4);
-        // Kill closing velocity so they don't re-overlap next frame.
+        // Ball handler keeps momentum — defenders get bumped off so they can't pin you.
+        let pushA = 0.5;
+        let pushB = 0.5;
+        if (ballOwnerId === a.id) {
+          pushA = 0.22;
+          pushB = 0.78;
+        } else if (ballOwnerId === b.id) {
+          pushA = 0.78;
+          pushB = 0.22;
+        }
+        const overlap = MIN_SEPARATION - d;
+        a.x = clamp(a.x - nx * overlap * pushA, PLAYER_R + 0.4, W - PLAYER_R - 0.4);
+        a.y = clamp(a.y - ny * overlap * pushA, PLAYER_R + 0.4, H - PLAYER_R - 0.4);
+        b.x = clamp(b.x + nx * overlap * pushB, PLAYER_R + 0.4, W - PLAYER_R - 0.4);
+        b.y = clamp(b.y + ny * overlap * pushB, PLAYER_R + 0.4, H - PLAYER_R - 0.4);
         const relVx = b.vx - a.vx;
         const relVy = b.vy - a.vy;
         const closing = relVx * nx + relVy * ny;
         if (closing < 0) {
-          a.vx += nx * closing * 0.5;
-          a.vy += ny * closing * 0.5;
-          b.vx -= nx * closing * 0.5;
-          b.vy -= ny * closing * 0.5;
+          // Don't kill the handler's drive velocity as hard.
+          const dampA = ballOwnerId === a.id ? 0.2 : 0.55;
+          const dampB = ballOwnerId === b.id ? 0.2 : 0.55;
+          a.vx += nx * closing * dampA;
+          a.vy += ny * closing * dampA;
+          b.vx -= nx * closing * dampB;
+          b.vy -= ny * closing * dampB;
         }
       }
     }
@@ -2187,7 +2465,6 @@ function drawCourt(
   canvas: HTMLCanvasElement,
   state: GameState,
   now: number,
-  faces: Map<string, HTMLImageElement>,
   you: CourtSquad,
   opp: CourtSquad,
   intro: boolean,
@@ -2251,6 +2528,23 @@ function drawCourt(
   const k2 = toScreen(16, H - 14);
   ctx.strokeRect(k1.x, k1.y, 18 * scale, 14 * scale);
   ctx.strokeRect(k2.x, k2.y, 18 * scale, 14 * scale);
+
+  // Shot clock painted in the offensive key (basket being attacked).
+  const offense = possessionSide(state);
+  if (offense && !intro && !state.over) {
+    const atTop = offense === "you";
+    const clockPt = toScreen(25, atTop ? 7.5 : H - 7.5);
+    const sec = Math.ceil(Math.max(0, state.shotClock - 1e-6));
+    const urgent = sec <= 6;
+    ctx.save();
+    ctx.globalAlpha = urgent ? 0.9 : 0.32;
+    ctx.fillStyle = urgent ? "#ef4444" : "#9ca3af";
+    ctx.font = `bold ${Math.max(28, Math.round(6.2 * scale))}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(sec), clockPt.x, clockPt.y);
+    ctx.restore();
+  }
 
   // Hoops — backboard, rim, net
   const hoopPulse =
@@ -2328,59 +2622,39 @@ function drawCourt(
     }
   }
 
-  // Players
-  for (const a of state.actors) {
+  // Players — Jetpack Joyride chibi bodies with walk cycles
+  // Draw back-to-front by court Y so overlaps read correctly.
+  const sorted = [...state.actors].sort((p, q) => p.y - q.y);
+  for (const a of sorted) {
     const { x, y } = toScreen(a.x, a.y);
     const r = PLAYER_R * scale;
-    if (x < -r * 2 || x > cssW + r * 2 || y < -r * 2 || y > cssH + r * 3) continue;
-    const img = faces.get(a.faceUrl);
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    if (img && img.complete && img.naturalWidth > 0) {
-      const zoom = 1.08;
-      const size = r * 2 * zoom;
-      ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
-    } else {
-      ctx.fillStyle = a.side === "you" ? "#ea580c" : "#3b82f6";
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
-    }
-    ctx.restore();
-
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.strokeStyle =
-      a.id === state.controlId
-        ? "#fff7ed"
-        : a.side === "you"
-          ? "rgba(249,115,22,0.95)"
-          : "rgba(96,165,250,0.95)";
-    ctx.lineWidth = a.id === state.controlId ? 3 : 2;
-    ctx.stroke();
-
-    // Controlled player glow ring
-    if (a.id === state.controlId) {
-      ctx.strokeStyle = `rgba(255,247,237,${0.25 + Math.sin(now / 140) * 0.2})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x, y, r + 3 + Math.sin(now / 160) * 1.5, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // Last name below the circle (full, not clipped by face)
-    const fontSize = Math.max(10, Math.round(r * 0.38));
-    ctx.font = `bold ${fontSize}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    const labelY = y + r + 4;
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(12,8,6,0.9)";
-    ctx.strokeText(a.lastName, x, labelY);
-    ctx.fillStyle = a.side === "you" ? "#ffedd5" : "#dbeafe";
-    ctx.fillText(a.lastName, x, labelY);
+    if (x < -r * 3 || x > cssW + r * 3 || y < -r * 4 || y > cssH + r * 5) continue;
+    const youSide = a.side === "you";
+    const speed = Math.hypot(a.vx, a.vy);
+    const releasing =
+      (state.meter.active && state.ball.ownerId === a.id) ||
+      (state.ball.inAir && state.ball.shooterId === a.id) ||
+      (now < state.meter.holdUntil && state.ball.shooterId === a.id);
+    const pose: SpritePose = releasing ? "shoot" : speed > 2.2 ? "run" : "idle";
+    drawCourtCallSprite(ctx, {
+      x,
+      y,
+      scale,
+      dna: a.dna,
+      jersey: youSide ? "#ea580c" : "#3b82f6",
+      jerseyDark: youSide ? "#c2410c" : "#1d4ed8",
+      shorts: youSide ? "#9a3412" : "#1e3a8a",
+      faceX: a.faceX,
+      faceY: a.faceY,
+      vx: a.vx,
+      vy: a.vy,
+      now,
+      controlled: a.id === state.controlId,
+      lastName: a.lastName,
+      labelColor: youSide ? "#ffedd5" : "#dbeafe",
+      phaseOffset: a.dna.seed * 0.0017,
+      pose,
+    });
   }
 
   // Ball
@@ -2444,19 +2718,6 @@ function drawCourt(
     ctx.fillRect(0, cssH * 0.38, cssW, cssH * 0.18);
     ctx.globalAlpha = 1;
   }
-
-  // Mini matchup chip
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
-  ctx.fillRect(8, cssH - 28, cssW - 16, 20);
-  ctx.font = `bold ${Math.max(9, Math.round(1.6 * scale))}px sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#fdba74";
-  ctx.fillText(
-    `${you.year} ${you.team.abbreviation}  ${state.youScore}-${state.oppScore}  ${opp.year} ${opp.team.abbreviation}`,
-    cssW / 2,
-    cssH - 18,
-  );
 
   ctx.restore();
 }

@@ -53,10 +53,10 @@ export const COURT_CALL_STEPS = [
   "Pick your team and the opponent with search or the year/team arrows — or tip off a random matchup.",
   "Lock one starter before tip-off — you control that player the whole game (no mid-game switches).",
   "Move with the left joystick on phone, or WASD / arrow keys on desktop.",
-  "Right pad: Shoot (right), Block/Rebound (top), Steal (left), Pass (bottom). You dribble automatically. To rebound, get near the loose ball and press Block or Steal — it won't auto-grab for you.",
+  "Desktop: Space shoot, K pass, F block, G steal, H rebound. Mobile pad: Shoot, Pass, Block, Steal, Board. You dribble automatically — rebounds only grab on H / Board when you're next to a loose ball.",
   "Shooting uses a timing meter — green is money, yellow is okay, red is off. It speeds up when you're guarded or far from the rim, and freezes briefly after you release.",
-  "Use the difficulty buttons on the right (Easy / Normal / Hard) to change the meter, AI, and contests.",
-  "First team to 11 points wins.",
+  "Difficulty (Easy / Normal / Hard) sits under the court with the mobile controls.",
+  "Four 1-minute quarters. A 24-second shot clock runs each possession — highest score at the end wins.",
 ];
 
 /** Green center + yellow pads on both sides; everything else is red. */
