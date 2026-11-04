@@ -4,6 +4,18 @@ import type { FaceDna, FaceExpression } from "@/lib/player-face";
 
 export type SpritePose = "idle" | "run" | "shoot";
 
+/** Continuous face morph — lerp these live; never snap discrete expressions. */
+export type FaceLive = {
+  /** 0 closed lips → 1 wide-open yell. */
+  open: number;
+  /** 0 flat → 1 full grin width. */
+  smile: number;
+  /** -1 furrowed / angry → 0 neutral → 1 raised surprise. */
+  brow: number;
+  /** 0 soft → 1 intense squint. */
+  intense: number;
+};
+
 export type SpriteDrawOpts = {
   x: number;
   y: number;
@@ -25,7 +37,38 @@ export type SpriteDrawOpts = {
   phaseOffset: number;
   /** idle = open hands, run = fists, shoot = release form. */
   pose: SpritePose;
+  /** Live blended face — morphs smoothly between actions. */
+  faceLive: FaceLive;
 };
+
+export function restingFaceLive(expression: FaceExpression): FaceLive {
+  switch (expression) {
+    case "grin":
+      return { open: 0.42, smile: 0.92, brow: 0.12, intense: 0.18 };
+    case "smile":
+      return { open: 0.18, smile: 0.72, brow: 0.05, intense: 0.1 };
+    case "open":
+      return { open: 0.68, smile: 0.28, brow: 0.35, intense: 0.15 };
+    case "focused":
+      return { open: 0.04, smile: 0.08, brow: -0.55, intense: 0.72 };
+    case "determined":
+      return { open: 0.12, smile: 0.18, brow: -0.72, intense: 0.88 };
+    case "smirk":
+      return { open: 0.06, smile: 0.48, brow: -0.08, intense: 0.28 };
+    case "cool":
+      return { open: 0.14, smile: 0.58, brow: -0.12, intense: 0.22 };
+    default:
+      return { open: 0.05, smile: 0.12, brow: 0, intense: 0.08 };
+  }
+}
+
+export function lerpFaceLive(cur: FaceLive, target: FaceLive, dt: number, rate = 8) {
+  const t = 1 - Math.exp(-rate * dt);
+  cur.open += (target.open - cur.open) * t;
+  cur.smile += (target.smile - cur.smile) * t;
+  cur.brow += (target.brow - cur.brow) * t;
+  cur.intense += (target.intense - cur.intense) * t;
+}
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
@@ -226,108 +269,103 @@ function fillHeadShape(
   }
 }
 
+/** Morphable mouth — open / smile drive cavity depth and tooth shine continuously. */
 function drawMouth(
   ctx: CanvasRenderingContext2D,
-  expression: FaceExpression,
+  live: FaceLive,
   mx: number,
   my: number,
   hr: number,
   shade: string,
   dna: FaceDna,
 ) {
-  const w = hr * (0.48 + ((dna.seed >>> 4) % 5) * 0.025);
-  const toothy =
-    expression === "grin" ||
-    expression === "open" ||
-    expression === "smile" ||
-    expression === "cool";
+  const open = Math.max(0, Math.min(1, live.open));
+  const smile = Math.max(0, Math.min(1, live.smile));
+  const w = hr * (0.42 + smile * 0.2 + ((dna.seed >>> 4) % 5) * 0.02);
 
-  if (toothy) {
-    const deep = expression === "open" || expression === "grin";
-    // Cavity
-    ctx.fillStyle = "#1a0e0a";
-    ctx.beginPath();
-    ctx.moveTo(mx - w, my);
-    ctx.quadraticCurveTo(mx, my + hr * (deep ? 0.42 : 0.3), mx + w, my);
-    ctx.quadraticCurveTo(mx, my + hr * 0.08, mx - w, my);
-    ctx.closePath();
-    ctx.fill();
-
-    // Gum line
-    ctx.fillStyle = "#c45c6a";
-    ctx.beginPath();
-    ctx.moveTo(mx - w * 0.92, my + hr * 0.01);
-    ctx.quadraticCurveTo(mx, my + hr * 0.06, mx + w * 0.92, my + hr * 0.01);
-    ctx.quadraticCurveTo(mx, my + hr * 0.02, mx - w * 0.92, my + hr * 0.01);
-    ctx.fill();
-
-    // Teeth plate
-    const teethTop = my + hr * 0.04;
-    const teethBot = my + hr * (deep ? 0.22 : 0.16);
-    ctx.fillStyle = "#fffef8";
-    ctx.beginPath();
-    ctx.moveTo(mx - w * 0.9, teethTop);
-    ctx.lineTo(mx + w * 0.9, teethTop);
-    ctx.lineTo(mx + w * 0.82, teethBot);
-    ctx.quadraticCurveTo(mx, teethBot + hr * 0.02, mx - w * 0.82, teethBot);
-    ctx.closePath();
-    ctx.fill();
-
-    // Individual teeth
-    ctx.strokeStyle = "rgba(60,40,30,0.28)";
-    ctx.lineWidth = Math.max(0.8, hr * 0.035);
-    const n = 6;
-    for (let i = 1; i < n; i++) {
-      const tx = mx - w * 0.82 + (i / n) * w * 1.64;
-      ctx.beginPath();
-      ctx.moveTo(tx, teethTop + hr * 0.01);
-      ctx.lineTo(tx, teethBot - hr * 0.01);
-      ctx.stroke();
-    }
-
-    // Specular shine across enamel
-    const shine = ctx.createLinearGradient(mx - w, teethTop, mx + w * 0.4, teethBot);
-    shine.addColorStop(0, "rgba(255,255,255,0)");
-    shine.addColorStop(0.35, "rgba(255,255,255,0.85)");
-    shine.addColorStop(0.55, "rgba(255,255,255,0.15)");
-    shine.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = shine;
-    ctx.beginPath();
-    ctx.moveTo(mx - w * 0.7, teethTop);
-    ctx.lineTo(mx - w * 0.15, teethTop);
-    ctx.lineTo(mx - w * 0.35, teethBot);
-    ctx.lineTo(mx - w * 0.85, teethBot);
-    ctx.closePath();
-    ctx.fill();
-
-    // Lower lip
+  // Mostly closed: curved lip line that still eases with smile/open.
+  if (open < 0.14 && smile < 0.35) {
+    const curve = hr * (0.02 + smile * 0.16 + open * 0.1);
     ctx.strokeStyle = shade;
-    ctx.lineWidth = Math.max(1.5, hr * 0.07);
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(mx - w * 0.85, my + hr * (deep ? 0.34 : 0.24));
-    ctx.quadraticCurveTo(mx, my + hr * (deep ? 0.48 : 0.34), mx + w * 0.85, my + hr * (deep ? 0.34 : 0.24));
-    ctx.stroke();
-    return;
-  }
-
-  if (expression === "smirk") {
-    ctx.strokeStyle = shade;
-    ctx.lineWidth = Math.max(1.8, hr * 0.09);
+    ctx.lineWidth = Math.max(1.6, hr * (0.07 + open * 0.04));
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(mx - w * 0.7, my);
-    ctx.quadraticCurveTo(mx + w * 0.1, my + hr * 0.22, mx + w, my - hr * 0.05);
+    ctx.quadraticCurveTo(mx, my + curve, mx + w * 0.7, my - smile * hr * 0.02);
     ctx.stroke();
+    // Hint of teeth peeking as open rises
+    if (open > 0.05) {
+      ctx.globalAlpha = open * 2.2;
+      ctx.fillStyle = "#fffef8";
+      ctx.fillRect(mx - w * 0.45, my + hr * 0.01, w * 0.9, hr * 0.06);
+      ctx.globalAlpha = 1;
+    }
     return;
   }
 
-  ctx.strokeStyle = shade;
-  ctx.lineWidth = Math.max(1.8, hr * 0.09);
-  ctx.lineCap = "round";
+  const cavity = hr * (0.14 + open * 0.32);
+  const teethH = hr * (0.08 + open * 0.16 + smile * 0.04);
+
+  ctx.fillStyle = "#1a0e0a";
   ctx.beginPath();
-  ctx.moveTo(mx - w * 0.65, my);
-  ctx.lineTo(mx + w * 0.65, my);
+  ctx.moveTo(mx - w, my);
+  ctx.quadraticCurveTo(mx, my + cavity, mx + w, my);
+  ctx.quadraticCurveTo(mx, my + hr * 0.06, mx - w, my);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.globalAlpha = 0.35 + open * 0.65;
+  ctx.fillStyle = "#c45c6a";
+  ctx.beginPath();
+  ctx.moveTo(mx - w * 0.92, my + hr * 0.01);
+  ctx.quadraticCurveTo(mx, my + hr * 0.05, mx + w * 0.92, my + hr * 0.01);
+  ctx.quadraticCurveTo(mx, my + hr * 0.015, mx - w * 0.92, my + hr * 0.01);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  const teethTop = my + hr * 0.035;
+  const teethBot = teethTop + teethH;
+  ctx.fillStyle = "#fffef8";
+  ctx.beginPath();
+  ctx.moveTo(mx - w * 0.9, teethTop);
+  ctx.lineTo(mx + w * 0.9, teethTop);
+  ctx.lineTo(mx + w * 0.82, teethBot);
+  ctx.quadraticCurveTo(mx, teethBot + hr * 0.015, mx - w * 0.82, teethBot);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(60,40,30,0.28)";
+  ctx.lineWidth = Math.max(0.8, hr * 0.035);
+  const n = 6;
+  for (let i = 1; i < n; i++) {
+    const tx = mx - w * 0.82 + (i / n) * w * 1.64;
+    ctx.beginPath();
+    ctx.moveTo(tx, teethTop + hr * 0.01);
+    ctx.lineTo(tx, teethBot - hr * 0.01);
+    ctx.stroke();
+  }
+
+  const shine = ctx.createLinearGradient(mx - w, teethTop, mx + w * 0.45, teethBot);
+  shine.addColorStop(0, "rgba(255,255,255,0)");
+  shine.addColorStop(0.35, `rgba(255,255,255,${0.55 + open * 0.35})`);
+  shine.addColorStop(0.55, "rgba(255,255,255,0.12)");
+  shine.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = shine;
+  ctx.beginPath();
+  ctx.moveTo(mx - w * 0.7, teethTop);
+  ctx.lineTo(mx - w * 0.12, teethTop);
+  ctx.lineTo(mx - w * 0.32, teethBot);
+  ctx.lineTo(mx - w * 0.85, teethBot);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = shade;
+  ctx.lineWidth = Math.max(1.5, hr * 0.07);
+  ctx.lineCap = "round";
+  const lipY = my + cavity * 0.82;
+  ctx.beginPath();
+  ctx.moveTo(mx - w * 0.85, lipY);
+  ctx.quadraticCurveTo(mx, my + cavity * 1.08, mx + w * 0.85, lipY);
   ctx.stroke();
 }
 
@@ -340,74 +378,70 @@ function drawDetailedEye(
   ry: number,
   side: -1 | 1,
   hr: number,
+  intense: number,
 ) {
-  // Socket shade
+  const squint = Math.max(0, Math.min(1, intense));
+  const eyeRy = ry * (1 - squint * 0.38);
+  const lidDrop = squint * ry * 0.35;
+
   ctx.fillStyle = "rgba(0,0,0,0.07)";
   ctx.beginPath();
-  ctx.ellipse(ex, ey + ry * 0.15, rx * 1.15, ry * 1.2, 0, 0, Math.PI * 2);
+  ctx.ellipse(ex, ey + eyeRy * 0.15, rx * 1.15, eyeRy * 1.2, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Sclera
   ctx.fillStyle = "#fffcf7";
   ctx.beginPath();
-  ctx.ellipse(ex, ey, rx, ry, 0, 0, Math.PI * 2);
+  ctx.ellipse(ex, ey, rx, eyeRy, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "rgba(30,18,12,0.22)";
   ctx.lineWidth = Math.max(1, hr * 0.035);
   ctx.stroke();
 
-  const irisR = Math.min(rx, ry) * 0.72;
+  const irisR = Math.min(rx, eyeRy) * 0.72;
   const ix = ex + side * rx * 0.08;
-  const iy = ey + ry * 0.06;
+  const iy = ey + eyeRy * 0.06;
 
-  // Iris base
   ctx.fillStyle = dna.eye;
   ctx.beginPath();
   ctx.arc(ix, iy, irisR, 0, Math.PI * 2);
   ctx.fill();
-  // Iris ring
   ctx.strokeStyle = "rgba(255,255,255,0.2)";
   ctx.lineWidth = Math.max(1, irisR * 0.18);
   ctx.beginPath();
   ctx.arc(ix, iy, irisR * 0.72, 0, Math.PI * 2);
   ctx.stroke();
-  // Darker outer iris
   ctx.strokeStyle = "rgba(0,0,0,0.35)";
   ctx.lineWidth = Math.max(1, irisR * 0.12);
   ctx.beginPath();
   ctx.arc(ix, iy, irisR * 0.95, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Pupil
   ctx.fillStyle = "#0a0604";
   ctx.beginPath();
-  ctx.arc(ix, iy, irisR * 0.42, 0, Math.PI * 2);
+  ctx.arc(ix, iy, irisR * (0.38 + squint * 0.08), 0, Math.PI * 2);
   ctx.fill();
 
-  // Primary catchlight
   ctx.fillStyle = "rgba(255,255,255,0.95)";
   ctx.beginPath();
   ctx.ellipse(ix - irisR * 0.28, iy - irisR * 0.32, irisR * 0.28, irisR * 0.22, -0.4, 0, Math.PI * 2);
   ctx.fill();
-  // Secondary spark
   ctx.beginPath();
   ctx.arc(ix + irisR * 0.22, iy + irisR * 0.18, irisR * 0.1, 0, Math.PI * 2);
   ctx.fill();
 
-  // Upper lid
+  // Upper lid — drops with intensity
   ctx.strokeStyle = "rgba(20,12,8,0.45)";
   ctx.lineWidth = Math.max(1.5, hr * 0.06);
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(ex - rx * 1.05, ey - ry * 0.15);
-  ctx.quadraticCurveTo(ex, ey - ry * 1.15, ex + rx * 1.05, ey - ry * 0.15);
+  ctx.moveTo(ex - rx * 1.05, ey - eyeRy * 0.15 + lidDrop * 0.4);
+  ctx.quadraticCurveTo(ex, ey - eyeRy * 1.15 + lidDrop, ex + rx * 1.05, ey - eyeRy * 0.15 + lidDrop * 0.4);
   ctx.stroke();
-  // Crease
   ctx.strokeStyle = "rgba(20,12,8,0.18)";
   ctx.lineWidth = Math.max(1, hr * 0.04);
   ctx.beginPath();
-  ctx.moveTo(ex - rx * 0.9, ey - ry * 0.55);
-  ctx.quadraticCurveTo(ex, ey - ry * 1.35, ex + rx * 0.9, ey - ry * 0.55);
+  ctx.moveTo(ex - rx * 0.9, ey - eyeRy * 0.55 + lidDrop * 0.5);
+  ctx.quadraticCurveTo(ex, ey - eyeRy * 1.35 + lidDrop, ex + rx * 0.9, ey - eyeRy * 0.55 + lidDrop * 0.5);
   ctx.stroke();
 }
 
@@ -417,10 +451,10 @@ function drawFace(
   hx: number,
   hy: number,
   hr: number,
+  live: FaceLive,
 ) {
   const m = faceMetrics(dna);
 
-  // Ears behind head
   ctx.fillStyle = dna.skinShade;
   ctx.beginPath();
   ctx.ellipse(hx - hr * m.jawW * 1.02, hy + hr * 0.02, hr * 0.2, hr * 0.3, 0, 0, Math.PI * 2);
@@ -434,14 +468,12 @@ function drawFace(
 
   fillHeadShape(ctx, dna, hx, hy, hr);
 
-  // Cheek warmth
   ctx.fillStyle = "rgba(220,90,70,0.12)";
   ctx.beginPath();
   ctx.ellipse(hx - hr * 0.48, hy + hr * 0.22, hr * 0.22, hr * 0.14, 0, 0, Math.PI * 2);
   ctx.ellipse(hx + hr * 0.48, hy + hr * 0.22, hr * 0.22, hr * 0.14, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Forehead highlight
   const hl = ctx.createLinearGradient(hx, hy - hr, hx, hy);
   hl.addColorStop(0, "rgba(255,255,255,0.22)");
   hl.addColorStop(1, "rgba(255,255,255,0)");
@@ -452,33 +484,32 @@ function drawFace(
 
   drawHair(ctx, dna, hx, hy, hr);
 
-  // Brows
+  // Brows follow live.brow continuously
+  const browAmt = Math.max(-1, Math.min(1, live.brow));
   const browThick = Math.max(2.4, hr * (0.12 + m.browHeavy * 0.08));
   ctx.strokeStyle = dna.brow;
   ctx.lineWidth = browThick;
   ctx.lineCap = "round";
-  const browY =
-    dna.expression === "focused" || dna.expression === "determined"
-      ? hy - hr * 0.34
-      : hy - hr * 0.38;
-  const browTilt =
-    dna.expression === "focused" || dna.expression === "determined" ? 0.14 : 0.05;
+  const browY = hy - hr * (0.36 - browAmt * 0.06);
+  // Negative brow = inner ends drop (furrow); positive = outer lift (surprise)
+  const innerTilt = -browAmt * 0.1;
+  const outerTilt = browAmt < 0 ? -browAmt * 0.14 : browAmt * 0.04;
   ctx.beginPath();
-  ctx.moveTo(hx - hr * (m.eyeSpread + 0.28), browY + hr * browTilt);
+  ctx.moveTo(hx - hr * (m.eyeSpread + 0.28), browY + hr * outerTilt);
   ctx.quadraticCurveTo(
     hx - hr * m.eyeSpread,
-    browY - hr * 0.14,
+    browY - hr * 0.12 + hr * innerTilt,
     hx - hr * 0.08,
-    browY + hr * 0.02,
+    browY + hr * (0.02 - innerTilt),
   );
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(hx + hr * (m.eyeSpread + 0.28), browY + hr * browTilt);
+  ctx.moveTo(hx + hr * (m.eyeSpread + 0.28), browY + hr * outerTilt);
   ctx.quadraticCurveTo(
     hx + hr * m.eyeSpread,
-    browY - hr * 0.14,
+    browY - hr * 0.12 + hr * innerTilt,
     hx + hr * 0.08,
-    browY + hr * 0.02,
+    browY + hr * (0.02 - innerTilt),
   );
   ctx.stroke();
 
@@ -493,10 +524,10 @@ function drawFace(
       hr * m.eyeRy,
       side,
       hr,
+      live.intense,
     );
   }
 
-  // Nose with bridge + tip highlight
   ctx.fillStyle = dna.skinShade;
   ctx.beginPath();
   ctx.moveTo(hx, hy + hr * 0.02);
@@ -509,7 +540,6 @@ function drawFace(
   ctx.ellipse(hx - hr * 0.02, hy + hr * 0.14, hr * 0.04, hr * 0.08, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Facial hair
   if (dna.facial !== "none") {
     ctx.fillStyle = dna.hair;
     if (dna.facial === "stubble") {
@@ -539,7 +569,7 @@ function drawFace(
     }
   }
 
-  drawMouth(ctx, dna.expression, hx, hy + hr * 0.5, hr, dna.skinShade, dna);
+  drawMouth(ctx, live, hx, hy + hr * 0.5, hr, dna.skinShade, dna);
 }
 
 function drawHand(
@@ -785,6 +815,7 @@ export function drawCourtCallSprite(
     labelColor,
     phaseOffset,
     pose,
+    faceLive,
   } = opts;
 
   const s = scale;
@@ -985,10 +1016,10 @@ export function drawCourtCallSprite(
   drawLeg(front);
   drawArm(front);
 
-  // Oversized detailed head — no ring stroke
+  // Oversized detailed head — live morphing expression
   const hx = 0;
   const hy = ty - headR * 0.62;
-  drawFace(ctx, dna, hx, hy, headR);
+  drawFace(ctx, dna, hx, hy, headR, faceLive);
 
   ctx.restore();
 

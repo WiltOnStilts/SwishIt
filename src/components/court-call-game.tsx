@@ -15,7 +15,13 @@ import {
   type CourtSquad,
 } from "@/lib/court-call";
 import { faceDnaFromName, lastNameOf, type FaceDna } from "@/lib/player-face";
-import { drawCourtCallSprite, type SpritePose } from "@/lib/court-call-sprite";
+import {
+  drawCourtCallSprite,
+  lerpFaceLive,
+  restingFaceLive,
+  type FaceLive,
+  type SpritePose,
+} from "@/lib/court-call-sprite";
 
 type Side = "you" | "opp";
 
@@ -36,6 +42,8 @@ type Actor = {
   offense: number;
   defense: number;
   pass: number;
+  /** Smooth live face morph — eased toward action targets each frame. */
+  faceLive: FaceLive;
 };
 
 /** Must be this close (centers) to steal from a handler. */
@@ -189,13 +197,15 @@ function makeActors(you: CourtSquad, opp: CourtSquad): Actor[] {
     const op = opp.lineup[slot];
     const [yx, yy] = youOffsets[slot];
     const [ox, oy] = oppOffsets[slot];
+    const youDna = faceDnaFromName(yp.playerName);
+    const oppDna = faceDnaFromName(op.playerName);
     out.push({
       id: `you-${slot}`,
       side: "you",
       slot,
       name: yp.playerName,
       lastName: lastNameOf(yp.playerName),
-      dna: faceDnaFromName(yp.playerName),
+      dna: youDna,
       x: yx,
       y: yy,
       vx: 0,
@@ -205,6 +215,7 @@ function makeActors(you: CourtSquad, opp: CourtSquad): Actor[] {
       offense: offenseRating(yp),
       defense: defenseRating(yp),
       pass: passRating(yp),
+      faceLive: { ...restingFaceLive(youDna.expression) },
     });
     out.push({
       id: `opp-${slot}`,
@@ -212,7 +223,7 @@ function makeActors(you: CourtSquad, opp: CourtSquad): Actor[] {
       slot,
       name: op.playerName,
       lastName: lastNameOf(op.playerName),
-      dna: faceDnaFromName(op.playerName),
+      dna: oppDna,
       x: ox,
       y: oy,
       vx: 0,
@@ -222,9 +233,83 @@ function makeActors(you: CourtSquad, opp: CourtSquad): Actor[] {
       offense: offenseRating(op),
       defense: defenseRating(op),
       pass: passRating(op),
+      faceLive: { ...restingFaceLive(oppDna.expression) },
     });
   }
   return out;
+}
+
+/** Pick a face target from live play, then ease toward it (no hard snaps). */
+function updateActorFaceLive(state: GameState, a: Actor, dt: number, now: number) {
+  const rest = restingFaceLive(a.dna.expression);
+  const target: FaceLive = { ...rest };
+  const speed = Math.hypot(a.vx, a.vy);
+  const attackY = a.side === "you" ? 4 : H - 4;
+  const rimDist = dist(a.x, a.y, 25, attackY);
+  // Positive when sprinting toward the hoop they attack.
+  const towardRim = a.side === "you" ? -a.vy : a.vy;
+  const cutting = speed > 5.5 && towardRim > 2.8 && rimDist < 42;
+  const hasBall = state.ball.ownerId === a.id && !state.ball.loose && !state.ball.inAir;
+  const shooting =
+    (state.meter.active && state.ball.ownerId === a.id) ||
+    (state.ball.inAir && state.ball.shooterId === a.id) ||
+    (now < state.meter.holdUntil && state.ball.shooterId === a.id);
+  const crashing =
+    state.ball.loose ||
+    (state.ball.inAir && dist(a.x, a.y, state.ball.x, state.ball.y) < 8);
+  const onDefense =
+    Boolean(state.ball.ownerId) &&
+    !state.ball.ownerId!.startsWith(a.side) &&
+    !state.ball.loose;
+  const guardingClose =
+    onDefense &&
+    state.ball.ownerId != null &&
+    dist(
+      a.x,
+      a.y,
+      state.actors.find((o) => o.id === state.ball.ownerId)?.x ?? a.x,
+      state.actors.find((o) => o.id === state.ball.ownerId)?.y ?? a.y,
+    ) < 5;
+
+  if (shooting) {
+    target.open = 0.08;
+    target.smile = 0.05;
+    target.brow = -0.85;
+    target.intense = 1;
+  } else if (cutting) {
+    // Wide open mouth on a hard cut / blow-by
+    target.open = 0.88;
+    target.smile = 0.22;
+    target.brow = 0.65;
+    target.intense = 0.35;
+  } else if (crashing) {
+    target.open = 0.72;
+    target.smile = 0.15;
+    target.brow = 0.45;
+    target.intense = 0.55;
+  } else if (hasBall && speed > 4) {
+    target.open = 0.28;
+    target.smile = 0.12;
+    target.brow = -0.45;
+    target.intense = 0.75;
+  } else if (hasBall) {
+    target.open = 0.12;
+    target.smile = 0.2;
+    target.brow = -0.25;
+    target.intense = 0.45;
+  } else if (guardingClose) {
+    target.open = 0.06;
+    target.smile = 0.04;
+    target.brow = -0.7;
+    target.intense = 0.9;
+  } else if (speed > 3.5) {
+    target.open = 0.38;
+    target.smile = 0.18;
+    target.brow = 0.2;
+    target.intense = 0.3;
+  }
+  // Slightly faster open/close so cuts read immediately; brows ease a touch slower.
+  lerpFaceLive(a.faceLive, target, dt, shooting || cutting ? 11 : 7.5);
 }
 
 /** Keep facing from movement so the dribble stays out front. */
@@ -1297,6 +1382,9 @@ function stepGame(
     for (const action of actions) {
       if (action === "shoot") handleAction(state, action, now, tuning);
     }
+    for (const a of state.actors) {
+      updateActorFaceLive(state, a, dt, now);
+    }
     return;
   }
 
@@ -1330,6 +1418,7 @@ function stepGame(
     a.y = clamp(a.y + a.vy * dt, PLAYER_R + 0.4, H - PLAYER_R - 0.4);
     a.vx *= 0.86;
     a.vy *= 0.86;
+    updateActorFaceLive(state, a, dt, now);
   }
   separateActors(state.actors, state.ball.ownerId);
 
@@ -2654,6 +2743,7 @@ function drawCourt(
       labelColor: youSide ? "#ffedd5" : "#dbeafe",
       phaseOffset: a.dna.seed * 0.0017,
       pose,
+      faceLive: a.faceLive,
     });
   }
 
