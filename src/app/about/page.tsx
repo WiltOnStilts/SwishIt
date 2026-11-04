@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: "About SwishIt",
   description:
     "What SwishIt is, who it is for, and how the basketball minigames work.",
+  alternates: {
+    canonical: "/about",
+  },
 };
 
 export default function AboutPage() {

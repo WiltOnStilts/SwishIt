@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: "Privacy Policy — SwishIt",
   description:
     "How SwishIt handles cookies, analytics, and Google advertising data.",
+  alternates: {
+    canonical: "/privacy",
+  },
 };
 
 export default function PrivacyPage() {

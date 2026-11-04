@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { Bebas_Neue, Fraunces, Manrope } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const display = Bebas_Neue({
@@ -23,9 +24,21 @@ const cozy = Fraunces({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "SwishIt — Basketball Minigames",
   description:
-    "Mobile-first basketball minigames: Undefeated all-time lineups and Detective daily NBA connections.",
+    "Free mobile-first basketball minigames: Undefeated all-time drafts, Detective daily NBA Connections, Superstar Studio career builds, and Court Call 5-on-5 arcade play.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "SwishIt — Basketball Minigames",
+    description:
+      "Free basketball puzzles and drafting games you can play in the browser—no account required.",
+    url: "/",
+    siteName: "SwishIt",
+    type: "website",
+  },
   verification: {
     google: "VINL0ey_H5eW7kcCfmRzVscaNmCQ9fgCdd13aQzC57w",
   },
