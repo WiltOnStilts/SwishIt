@@ -31,6 +31,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
+  icons: {
+    icon: [{ url: "/logo.png", type: "image/png", sizes: "512x512" }],
+  },
   openGraph: {
     title: "SwishIt — Basketball Minigames",
     description:
@@ -38,6 +41,7 @@ export const metadata: Metadata = {
     url: "/",
     siteName: "SwishIt",
     type: "website",
+    images: [{ url: "/logo.png", width: 512, height: 512, alt: "SwishIt" }],
   },
   verification: {
     google: "VINL0ey_H5eW7kcCfmRzVscaNmCQ9fgCdd13aQzC57w",
@@ -45,6 +49,16 @@ export const metadata: Metadata = {
   other: {
     "google-adsense-account": "ca-pub-6602128015512763",
   },
+};
+
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "SwishIt",
+  url: SITE_URL,
+  logo: `${SITE_URL}/logo.png`,
+  description:
+    "Free basketball puzzles and drafting games you can play in the browser.",
 };
 
 export const viewport: Viewport = {
@@ -62,6 +76,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${display.variable} ${body.variable} ${cozy.variable} h-full`}
     >
       <body className="flex min-h-full flex-col antialiased">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationJsonLd),
+          }}
+        />
         {children}
         <SiteFooter />
         {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
