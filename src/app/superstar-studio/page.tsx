@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import SuperstarStudioPage from "./superstar-game";
+import { breadcrumbJsonLd } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Superstar Studio — Build a Custom NBA Star · SwishIt",
@@ -17,5 +18,17 @@ export const metadata: Metadata = {
 };
 
 export default function SuperstarStudioRoute() {
-  return <SuperstarStudioPage />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(
+            breadcrumbJsonLd("Superstar Studio", "/superstar-studio"),
+          ),
+        }}
+      />
+      <SuperstarStudioPage />
+    </>
+  );
 }

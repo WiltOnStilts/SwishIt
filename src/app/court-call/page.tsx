@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import CourtCallClient from "./court-call-client";
+import { breadcrumbJsonLd } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Court Call — 5-on-5 Arcade Basketball · SwishIt",
@@ -17,5 +18,15 @@ export const metadata: Metadata = {
 };
 
 export default function CourtCallPage() {
-  return <CourtCallClient />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd("Court Call", "/court-call")),
+        }}
+      />
+      <CourtCallClient />
+    </>
+  );
 }

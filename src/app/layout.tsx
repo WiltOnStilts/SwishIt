@@ -57,16 +57,6 @@ export const metadata: Metadata = {
   },
 };
 
-const organizationJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "Organization",
-  name: "SwishIt",
-  url: SITE_URL,
-  logo: `${SITE_URL}/logo.png`,
-  description:
-    "Free basketball puzzles and drafting games you can play in the browser.",
-};
-
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -82,12 +72,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${display.variable} ${body.variable} ${cozy.variable} h-full`}
     >
       <body className="flex min-h-full flex-col antialiased">
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(organizationJsonLd),
-          }}
-        />
         {children}
         <SiteFooter />
         {gaId ? <GoogleAnalytics gaId={gaId} /> : null}

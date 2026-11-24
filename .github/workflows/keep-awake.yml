@@ -1,9 +1,10 @@
+# Optional. SwishIt is on a paid Render plan (no sleep). Kept as light insurance
+# only—safe to disable if GitHub Actions noise is unwanted.
 name: Keep Render awake
 
 on:
   schedule:
-    # Free Render services spin down after 15 minutes. This stays inside that window.
-    - cron: "*/10 * * * *"
+    - cron: "0 */6 * * *"
   workflow_dispatch:
 
 jobs:
@@ -11,8 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Ping the app so Google sees the real robots.txt
+      - name: Ping health, homepage, robots, and sitemap
         run: |
-          curl -fsS --retry 5 --retry-all-errors --retry-delay 15 --max-time 90 \
-            -A "SwishItKeepAlive" \
-            "https://swishit.onrender.com/api/health"
+          set -euo pipefail
+          BASE="https://swishit.onrender.com"
+          for path in /api/health /robots.txt / /sitemap.xml; do
+            curl -fsS --retry 3 --retry-all-errors --retry-delay 5 --max-time 60 \
+              -A "SwishItKeepAlive" \
+              "$BASE$path" >/dev/null
+          done

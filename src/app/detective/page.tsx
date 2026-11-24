@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import DetectiveGame from "./detective-game";
+import { breadcrumbJsonLd } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Detective — Daily NBA Connections · SwishIt",
@@ -17,5 +18,15 @@ export const metadata: Metadata = {
 };
 
 export default function DetectivePage() {
-  return <DetectiveGame />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd("Detective", "/detective")),
+        }}
+      />
+      <DetectiveGame />
+    </>
+  );
 }

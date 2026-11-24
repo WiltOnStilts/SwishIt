@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import UndefeatedGame from "./undefeated-game";
+import { breadcrumbJsonLd } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Undefeated — Draft an All-Time Lineup · SwishIt",
@@ -17,5 +18,15 @@ export const metadata: Metadata = {
 };
 
 export default function UndefeatedPage() {
-  return <UndefeatedGame />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd("Undefeated", "/undefeated")),
+        }}
+      />
+      <UndefeatedGame />
+    </>
+  );
 }
