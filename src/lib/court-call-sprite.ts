@@ -46,11 +46,11 @@ export type SpriteDrawOpts = {
 export function restingFaceLive(expression: FaceExpression): FaceLive {
   switch (expression) {
     case "grin":
-      return { open: 0.42, smile: 0.92, brow: 0.12, intense: 0.18 };
+      return { open: 0.16, smile: 0.92, brow: 0.12, intense: 0.18 };
     case "smile":
-      return { open: 0.18, smile: 0.72, brow: 0.05, intense: 0.1 };
+      return { open: 0.08, smile: 0.72, brow: 0.05, intense: 0.1 };
     case "open":
-      return { open: 0.68, smile: 0.28, brow: 0.35, intense: 0.15 };
+      return { open: 0.4, smile: 0.28, brow: 0.35, intense: 0.15 };
     case "focused":
       return { open: 0.04, smile: 0.08, brow: -0.55, intense: 0.72 };
     case "determined":
@@ -221,19 +221,17 @@ function fillHeadShape(
   ctx.fillStyle = dna.skin;
   ctx.beginPath();
   if (dna.head === "square") {
-    const top = hy - hr * 0.95;
+    // Softened “square” — rounded temples/jaw, not a box.
+    const top = hy - hr * 0.98;
     const bot = hy + hr * m.chinDrop;
-    const jw = hr * m.jawW;
-    const cw = hr * m.chinW;
-    ctx.moveTo(hx - jw * 0.85, top + hr * 0.15);
-    ctx.quadraticCurveTo(hx - jw * 0.9, top, hx - jw * 0.45, top);
-    ctx.lineTo(hx + jw * 0.45, top);
-    ctx.quadraticCurveTo(hx + jw * 0.9, top, hx + jw * 0.85, top + hr * 0.15);
-    ctx.lineTo(hx + jw, hy + hr * 0.25);
-    ctx.quadraticCurveTo(hx + jw * 0.95, bot - hr * 0.1, hx + cw, bot);
-    ctx.lineTo(hx - cw, bot);
-    ctx.quadraticCurveTo(hx - jw * 0.95, bot - hr * 0.1, hx - jw, hy + hr * 0.25);
-    ctx.closePath();
+    const jw = hr * m.jawW * 0.98;
+    const cw = hr * m.chinW * 1.05;
+    ctx.moveTo(hx, top);
+    ctx.bezierCurveTo(hx + jw * 0.55, top, hx + jw, hy - hr * 0.35, hx + jw, hy + hr * 0.15);
+    ctx.quadraticCurveTo(hx + jw * 0.92, bot - hr * 0.12, hx + cw, bot);
+    ctx.quadraticCurveTo(hx, bot + hr * 0.04, hx - cw, bot);
+    ctx.quadraticCurveTo(hx - jw * 0.92, bot - hr * 0.12, hx - jw, hy + hr * 0.15);
+    ctx.bezierCurveTo(hx - jw, hy - hr * 0.35, hx - jw * 0.55, top, hx, top);
   } else if (m.pointedChin || dna.head === "oval") {
     const top = hy - hr * 1.02;
     const bot = hy + hr * m.chinDrop;
@@ -271,7 +269,7 @@ function fillHeadShape(
   }
 }
 
-/** Morphable mouth — open / smile drive cavity depth and tooth shine continuously. */
+/** Soft lip / oral cavity — never a flat white box. */
 function drawMouth(
   ctx: CanvasRenderingContext2D,
   live: FaceLive,
@@ -283,92 +281,163 @@ function drawMouth(
 ) {
   const open = Math.max(0, Math.min(1, live.open));
   const smile = Math.max(0, Math.min(1, live.smile));
-  const w = hr * (0.42 + smile * 0.2 + ((dna.seed >>> 4) % 5) * 0.02);
+  const w = hr * (0.38 + smile * 0.22 + ((dna.seed >>> 4) % 5) * 0.018);
+  const lip = mixHex(dna.skin, "#8a3a42", 0.42);
+  const lipDeep = mixHex(shade, "#6b2a32", 0.55);
+  const cornerLift = smile * hr * 0.06 - open * hr * 0.01;
+  const upperY = my - open * hr * 0.02;
+  const lowerDrop = hr * (0.04 + open * 0.38 + smile * 0.04);
 
-  // Mostly closed: curved lip line that still eases with smile/open.
-  if (open < 0.14 && smile < 0.35) {
-    const curve = hr * (0.02 + smile * 0.16 + open * 0.1);
-    ctx.strokeStyle = shade;
-    ctx.lineWidth = Math.max(1.6, hr * (0.07 + open * 0.04));
+  // Closed / soft smile — two lip curves, no teeth slab.
+  if (open < 0.12) {
+    const curve = hr * (0.015 + smile * 0.14);
+    ctx.strokeStyle = lipDeep;
+    ctx.lineWidth = Math.max(1.4, hr * (0.055 + smile * 0.02));
     ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.moveTo(mx - w * 0.7, my);
-    ctx.quadraticCurveTo(mx, my + curve, mx + w * 0.7, my - smile * hr * 0.02);
+    ctx.moveTo(mx - w * 0.78, upperY + cornerLift * 0.2);
+    ctx.quadraticCurveTo(mx - w * 0.2, upperY - hr * 0.02, mx, upperY + curve * 0.15);
+    ctx.quadraticCurveTo(mx + w * 0.2, upperY - hr * 0.02, mx + w * 0.78, upperY + cornerLift * 0.2);
     ctx.stroke();
-    // Hint of teeth peeking as open rises
-    if (open > 0.05) {
-      ctx.globalAlpha = open * 2.2;
-      ctx.fillStyle = "#fffef8";
-      ctx.fillRect(mx - w * 0.45, my + hr * 0.01, w * 0.9, hr * 0.06);
+    ctx.strokeStyle = lip;
+    ctx.lineWidth = Math.max(1.2, hr * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(mx - w * 0.72, upperY + hr * 0.015);
+    ctx.quadraticCurveTo(mx, upperY + curve + hr * 0.02, mx + w * 0.72, upperY + hr * 0.015);
+    ctx.stroke();
+    if (smile > 0.45) {
+      ctx.globalAlpha = (smile - 0.45) * 1.4;
+      ctx.strokeStyle = "rgba(255,248,240,0.55)";
+      ctx.lineWidth = Math.max(1, hr * 0.035);
+      ctx.beginPath();
+      ctx.moveTo(mx - w * 0.4, upperY + curve * 0.55);
+      ctx.quadraticCurveTo(mx, upperY + curve * 0.7, mx + w * 0.4, upperY + curve * 0.55);
+      ctx.stroke();
       ctx.globalAlpha = 1;
     }
     return;
   }
 
-  const cavity = hr * (0.14 + open * 0.32);
-  const teethH = hr * (0.08 + open * 0.16 + smile * 0.04);
+  // Open mouth — organic oval cavity + lip volume + arched teeth strip.
+  const cavityH = lowerDrop * 0.92;
+  const cavityW = w * (0.72 + open * 0.12);
 
-  ctx.fillStyle = "#1a0e0a";
+  ctx.fillStyle = "#1c0c0a";
   ctx.beginPath();
-  ctx.moveTo(mx - w, my);
-  ctx.quadraticCurveTo(mx, my + cavity, mx + w, my);
-  ctx.quadraticCurveTo(mx, my + hr * 0.06, mx - w, my);
+  ctx.moveTo(mx - cavityW, upperY + hr * 0.02);
+  ctx.bezierCurveTo(
+    mx - cavityW * 0.55,
+    upperY - hr * 0.02,
+    mx + cavityW * 0.55,
+    upperY - hr * 0.02,
+    mx + cavityW,
+    upperY + hr * 0.02,
+  );
+  ctx.bezierCurveTo(
+    mx + cavityW * 1.05,
+    upperY + cavityH * 0.55,
+    mx + cavityW * 0.7,
+    upperY + cavityH,
+    mx,
+    upperY + cavityH,
+  );
+  ctx.bezierCurveTo(
+    mx - cavityW * 0.7,
+    upperY + cavityH,
+    mx - cavityW * 1.05,
+    upperY + cavityH * 0.55,
+    mx - cavityW,
+    upperY + hr * 0.02,
+  );
   ctx.closePath();
   ctx.fill();
 
-  ctx.globalAlpha = 0.35 + open * 0.65;
-  ctx.fillStyle = "#c45c6a";
-  ctx.beginPath();
-  ctx.moveTo(mx - w * 0.92, my + hr * 0.01);
-  ctx.quadraticCurveTo(mx, my + hr * 0.05, mx + w * 0.92, my + hr * 0.01);
-  ctx.quadraticCurveTo(mx, my + hr * 0.015, mx - w * 0.92, my + hr * 0.01);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  const teethTop = my + hr * 0.035;
-  const teethBot = teethTop + teethH;
-  ctx.fillStyle = "#fffef8";
-  ctx.beginPath();
-  ctx.moveTo(mx - w * 0.9, teethTop);
-  ctx.lineTo(mx + w * 0.9, teethTop);
-  ctx.lineTo(mx + w * 0.82, teethBot);
-  ctx.quadraticCurveTo(mx, teethBot + hr * 0.015, mx - w * 0.82, teethBot);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = "rgba(60,40,30,0.28)";
-  ctx.lineWidth = Math.max(0.8, hr * 0.035);
-  const n = 6;
-  for (let i = 1; i < n; i++) {
-    const tx = mx - w * 0.82 + (i / n) * w * 1.64;
+  // Tongue
+  if (open > 0.28) {
+    ctx.globalAlpha = 0.55 + open * 0.35;
+    ctx.fillStyle = "#c45c6a";
     ctx.beginPath();
-    ctx.moveTo(tx, teethTop + hr * 0.01);
-    ctx.lineTo(tx, teethBot - hr * 0.01);
-    ctx.stroke();
+    ctx.ellipse(
+      mx,
+      upperY + cavityH * (0.62 + open * 0.08),
+      cavityW * 0.55,
+      cavityH * 0.28,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
-  const shine = ctx.createLinearGradient(mx - w, teethTop, mx + w * 0.45, teethBot);
-  shine.addColorStop(0, "rgba(255,255,255,0)");
-  shine.addColorStop(0.35, `rgba(255,255,255,${0.55 + open * 0.35})`);
-  shine.addColorStop(0.55, "rgba(255,255,255,0.12)");
-  shine.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = shine;
+  // Upper teeth — thin arched ribbon, not a rectangle
+  if (open > 0.16) {
+    const teethTop = upperY + hr * 0.04;
+    const teethH = hr * (0.05 + Math.min(0.1, open * 0.12));
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(mx - cavityW * 0.88, teethTop);
+    ctx.quadraticCurveTo(mx, teethTop - hr * 0.015, mx + cavityW * 0.88, teethTop);
+    ctx.lineTo(mx + cavityW * 0.78, teethTop + teethH);
+    ctx.quadraticCurveTo(mx, teethTop + teethH + hr * 0.02, mx - cavityW * 0.78, teethTop + teethH);
+    ctx.closePath();
+    ctx.clip();
+    const tg = ctx.createLinearGradient(mx, teethTop, mx, teethTop + teethH);
+    tg.addColorStop(0, "#fffef9");
+    tg.addColorStop(0.55, "#f0e6d8");
+    tg.addColorStop(1, "#d9cbb8");
+    ctx.fillStyle = tg;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(90,60,45,0.22)";
+    ctx.lineWidth = Math.max(0.6, hr * 0.025);
+    const n = 5;
+    for (let i = 1; i < n; i++) {
+      const tx = mx - cavityW * 0.7 + (i / n) * cavityW * 1.4;
+      ctx.beginPath();
+      ctx.moveTo(tx, teethTop + hr * 0.008);
+      ctx.lineTo(tx, teethTop + teethH - hr * 0.008);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Upper lip (cupid's bow)
+  ctx.fillStyle = lip;
   ctx.beginPath();
-  ctx.moveTo(mx - w * 0.7, teethTop);
-  ctx.lineTo(mx - w * 0.12, teethTop);
-  ctx.lineTo(mx - w * 0.32, teethBot);
-  ctx.lineTo(mx - w * 0.85, teethBot);
-  ctx.closePath();
+  ctx.moveTo(mx - w * 0.95, upperY + hr * 0.04);
+  ctx.quadraticCurveTo(mx - w * 0.35, upperY - hr * 0.06, mx - w * 0.08, upperY - hr * 0.01);
+  ctx.quadraticCurveTo(mx, upperY - hr * 0.045, mx + w * 0.08, upperY - hr * 0.01);
+  ctx.quadraticCurveTo(mx + w * 0.35, upperY - hr * 0.06, mx + w * 0.95, upperY + hr * 0.04);
+  ctx.quadraticCurveTo(mx, upperY + hr * 0.05, mx - w * 0.95, upperY + hr * 0.04);
   ctx.fill();
 
-  ctx.strokeStyle = shade;
-  ctx.lineWidth = Math.max(1.5, hr * 0.07);
-  ctx.lineCap = "round";
-  const lipY = my + cavity * 0.82;
+  // Lower lip
+  ctx.fillStyle = lipDeep;
   ctx.beginPath();
-  ctx.moveTo(mx - w * 0.85, lipY);
-  ctx.quadraticCurveTo(mx, my + cavity * 1.08, mx + w * 0.85, lipY);
-  ctx.stroke();
+  ctx.moveTo(mx - w * 0.88, upperY + cavityH * 0.72);
+  ctx.quadraticCurveTo(mx, upperY + cavityH * 1.12, mx + w * 0.88, upperY + cavityH * 0.72);
+  ctx.quadraticCurveTo(mx, upperY + cavityH * 0.85, mx - w * 0.88, upperY + cavityH * 0.72);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,200,190,0.28)";
+  ctx.beginPath();
+  ctx.ellipse(mx, upperY + cavityH * 0.88, w * 0.35, hr * 0.04, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Cheap skin/lip blend without pulling in a color lib. */
+function mixHex(a: string, b: string, t: number): string {
+  const pa = parseHex(a);
+  const pb = parseHex(b);
+  if (!pa || !pb) return a;
+  const m = (i: number) => Math.round(pa[i]! + (pb[i]! - pa[i]!) * t);
+  return `rgb(${m(0)},${m(1)},${m(2)})`;
+}
+
+function parseHex(c: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(c.trim());
+  if (!m) return null;
+  const n = parseInt(m[1]!, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 function drawDetailedEye(
@@ -590,19 +659,18 @@ function drawHand(
 
   if (mode === "fist") {
     ctx.fillStyle = skin;
-    roundRect(ctx, -size * 0.55, -size * 0.5, size * 1.1, size * 1.05, size * 0.28);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 0.55, size * 0.52, 0.15, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = shade;
-    // Knuckles
     for (let i = -1.5; i <= 1.5; i++) {
       ctx.beginPath();
-      ctx.arc(i * size * 0.28, -size * 0.35, size * 0.16, 0, Math.PI * 2);
+      ctx.ellipse(i * size * 0.26, -size * 0.32, size * 0.14, size * 0.16, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Thumb tuck
     ctx.fillStyle = skin;
     ctx.beginPath();
-    ctx.ellipse(-size * 0.55, size * 0.05, size * 0.28, size * 0.22, -0.5, 0, Math.PI * 2);
+    ctx.ellipse(-size * 0.48, size * 0.08, size * 0.26, size * 0.2, -0.55, 0, Math.PI * 2);
     ctx.fill();
   } else {
     // Open / shoot — palm + fingers
@@ -668,7 +736,7 @@ function projectSagittal(
 
 /**
  * Sagittal walk: limbs swing forward/back along facing, not out to the sides.
- * Angle 0 = straight down; positive = forward along (faceX, faceY).
+ * Uses eased hip/knee curves so plant → push → swing reads smoother.
  */
 function gaitLimbs(
   phase: number,
@@ -682,18 +750,17 @@ function gaitLimbs(
   foreArm: number,
   faceX: number,
   faceY: number,
+  idleSway = 0,
 ): LimbPose[] {
   const hipY = torsoH * 0.38;
   const shoulderY = ty + torsoH * 0.2;
   const fl = Math.hypot(faceX, faceY) || 1;
   let fwdX = faceX / fl;
   let fwdY = faceY / fl;
-  // Keep a readable stride even when facing is nearly zero.
   if (Math.hypot(fwdX, fwdY) < 0.2) {
     fwdX = 0;
     fwdY = -1;
   }
-  // Perpendicular in screen space for left/right hip & shoulder seats.
   const rightX = -fwdY;
   const rightY = fwdX;
 
@@ -701,16 +768,21 @@ function gaitLimbs(
 
   for (const side of [-1, 1] as const) {
     const p = phase + (side === 1 ? Math.PI : 0);
-    const hipAngle = Math.sin(p) * 0.95 * strideAmt;
+    // Smoothstep-ish swing — less robotic than raw sin peaks.
+    const swing = Math.sin(p);
+    const swing2 = Math.sin(p * 2);
+    const hipAngle = (swing * 1.05 + idleSway * 0.12 * side) * strideAmt;
+    // Bend most through mid-swing; ease near plant.
+    const plant = Math.max(0, Math.cos(p));
+    const lift = Math.max(0, -Math.cos(p));
     const kneeBend =
-      0.18 +
-      (0.55 + Math.max(0, Math.cos(p)) * 0.85 + Math.max(0, -Math.sin(p)) * 0.25) *
-        strideAmt;
+      0.22 +
+      (0.42 + plant * 0.55 + lift * 0.75 + Math.max(0, -swing) * 0.2) * strideAmt;
     const shinAngle = hipAngle - kneeBend;
 
-    const seat = torsoW * 0.12 * side;
+    const seat = torsoW * (0.11 + Math.abs(swing) * 0.015 * strideAmt) * side;
     const hipX = seat * rightX;
-    const hipY0 = hipY + seat * rightY * 0.15;
+    const hipY0 = hipY + seat * rightY * 0.15 + plant * 0.04 * strideAmt * thighLen * 0.15;
     const thigh = projectSagittal(
       Math.sin(hipAngle) * thighLen,
       Math.cos(hipAngle) * thighLen,
@@ -719,7 +791,7 @@ function gaitLimbs(
       hipX,
       hipY0,
     );
-    const shin = projectSagittal(
+    let shin = projectSagittal(
       Math.sin(shinAngle) * shinLen,
       Math.cos(shinAngle) * shinLen,
       fwdX,
@@ -727,16 +799,26 @@ function gaitLimbs(
       thigh.x,
       thigh.y,
     );
+    // Flatten foot slightly on plant so steps feel grounded.
+    if (plant > 0.55 && strideAmt > 0.4) {
+      shin = {
+        x: shin.x + fwdX * plant * 0.08 * shinLen,
+        y: shin.y + plant * 0.04 * shinLen,
+      };
+    }
 
     const ap = p + Math.PI;
+    const armSwing = Math.sin(ap);
     const armSeat = torsoW * 0.46 * side;
-    const shoulderX = armSeat * rightX;
-    const shoulderY0 = shoulderY + armSeat * rightY * 0.1;
-    const armAngle = Math.sin(ap) * 0.75 * strideAmt;
-    const elbowBend = 0.35 + Math.max(0, Math.sin(ap)) * 0.45 * strideAmt;
+    const shoulderX = armSeat * rightX + idleSway * rightX * 0.04 * side;
+    const shoulderY0 =
+      shoulderY + armSeat * rightY * 0.1 - Math.max(0, armSwing) * 0.06 * strideAmt * upperArm;
+    const armAngle = (armSwing * 0.82 + swing2 * 0.06) * strideAmt + idleSway * 0.08 * side;
+    const elbowBend =
+      0.32 + Math.max(0, armSwing) * 0.5 * strideAmt + (1 - strideAmt) * 0.18;
     const elbow = projectSagittal(
       Math.sin(armAngle) * upperArm,
-      Math.cos(armAngle) * upperArm,
+      Math.cos(armAngle) * upperArm * (0.95 + strideAmt * 0.05),
       fwdX,
       fwdY,
       shoulderX,
@@ -853,32 +935,37 @@ export function drawCourtCallSprite(
   const s = scale;
   const speed = Math.hypot(vx, vy);
   const moving = pose === "run" || speed > 1.4;
-  const strideAmt = pose === "shoot" ? 0.1 : moving ? 1 : 0.14;
-  const cadence = 1.45;
+  const strideAmt =
+    pose === "shoot" ? 0.08 : moving ? Math.min(1.05, 0.35 + speed / 9) : 0.12;
+  // Cadence tracks speed so sprinting doesn't look like a slow jog.
+  const cadence =
+    pose === "shoot" ? 0.6 : moving ? 1.05 + Math.min(1.35, speed / 7.5) : 0.55;
   const phase = (now / 1000) * cadence * Math.PI * 2 + phaseOffset;
+  const idleSway = Math.sin(now / 420 + phaseOffset) * (moving ? 0.25 : 1);
+  const footPulse = Math.pow(Math.abs(Math.sin(phase)), 1.35);
   const bob =
     (moving && pose !== "shoot"
-      ? Math.abs(Math.sin(phase * 2)) * 0.18 * strideAmt
-      : Math.sin(now / 240) * 0.05) * s;
+      ? footPulse * 0.22 * strideAmt + Math.sin(phase) * 0.03
+      : Math.sin(now / 380) * 0.045 + idleSway * 0.02) * s;
+  const lean = moving && pose !== "shoot" ? Math.min(0.14, speed / 55) : 0;
 
-  // Athletic MyCAREER proportions — slightly taller/thicker in volumetric mode.
+  // Athletic proportions — slightly taller/thicker in volumetric mode.
   const v = volumetric ? 1.12 : 1;
-  const headR = 1.72 * s * (volumetric ? 1.05 : 1);
-  const torsoW = 2.15 * s * v;
-  const torsoH = 2.05 * s * v;
-  const thighLen = 1.15 * s * v;
-  const shinLen = 1.05 * s * v;
+  const headR = 1.68 * s * (volumetric ? 1.04 : 1);
+  const torsoW = 2.05 * s * v;
+  const torsoH = 2.1 * s * v;
+  const thighLen = 1.18 * s * v;
+  const shinLen = 1.08 * s * v;
   const legSpan = thighLen + shinLen;
-  const legW = 0.62 * s * v;
-  const upperArm = 0.92 * s * v;
-  const foreArm = 0.82 * s * v;
-  const armW = 0.48 * s * v;
+  const legW = 0.58 * s * v;
+  const upperArm = 0.95 * s * v;
+  const foreArm = 0.84 * s * v;
+  const armW = 0.46 * s * v;
   const shoeR = 0.48 * s * v;
   const handSize = armW * 0.95;
 
   const cx = x;
   const cy = y + bob;
-  const tx = -torsoW / 2;
   const ty = -torsoH * 0.42;
 
   const fl = Math.hypot(faceX, faceY) || 1;
@@ -897,6 +984,7 @@ export function drawCourtCallSprite(
     foreArm,
     faceX,
     faceY,
+    idleSway,
   );
 
   if (pose === "shoot") {
@@ -958,6 +1046,9 @@ export function drawCourtCallSprite(
   }
 
   ctx.translate(cx, cy);
+  if (lean > 0.01) {
+    ctx.transform(1, lean * fwdY * 0.35, lean * fwdX * 0.5, 1, 0, 0);
+  }
 
   const drawSneaker = (limb: LimbPose) => {
     const ang = Math.atan2(fwdY, fwdX);
@@ -1099,105 +1190,111 @@ export function drawCourtCallSprite(
   drawLeg(back);
   drawArm(back);
 
-  // Jersey torso with collar + side panels (lit like a 3D form)
-  const jerseyGrad = ctx.createLinearGradient(tx, ty, tx + torsoW, ty + torsoH);
+  // Athletic jersey silhouette (shoulders wide → waist tapered — not a box).
+  const shoulder = torsoW * 0.5;
+  const waist = torsoW * 0.36;
+  const hem = torsoW * 0.42;
+  const jerseyGrad = ctx.createLinearGradient(-shoulder, ty, shoulder, ty + torsoH);
   jerseyGrad.addColorStop(0, jersey);
-  jerseyGrad.addColorStop(0.45, jersey);
-  jerseyGrad.addColorStop(0.78, jerseyDark);
+  jerseyGrad.addColorStop(0.4, jersey);
+  jerseyGrad.addColorStop(0.75, jerseyDark);
   jerseyGrad.addColorStop(1, jerseyDark);
   ctx.fillStyle = jerseyGrad;
-  roundRect(ctx, tx, ty, torsoW, torsoH, torsoW * 0.22);
+  ctx.beginPath();
+  ctx.moveTo(-shoulder * 0.92, ty + torsoH * 0.08);
+  ctx.quadraticCurveTo(-shoulder, ty, -shoulder * 0.55, ty);
+  ctx.lineTo(shoulder * 0.55, ty);
+  ctx.quadraticCurveTo(shoulder, ty, shoulder * 0.92, ty + torsoH * 0.08);
+  ctx.quadraticCurveTo(waist * 1.05, ty + torsoH * 0.55, hem, ty + torsoH * 0.72);
+  ctx.quadraticCurveTo(0, ty + torsoH * 0.76, -hem, ty + torsoH * 0.72);
+  ctx.quadraticCurveTo(-waist * 1.05, ty + torsoH * 0.55, -shoulder * 0.92, ty + torsoH * 0.08);
+  ctx.closePath();
   ctx.fill();
   if (volumetric) {
-    // Side wrap shade
-    ctx.fillStyle = "rgba(0,0,0,0.18)";
-    roundRect(ctx, tx + torsoW * 0.72, ty + torsoH * 0.08, torsoW * 0.28, torsoH * 0.84, torsoW * 0.1);
+    ctx.fillStyle = "rgba(0,0,0,0.16)";
+    ctx.beginPath();
+    ctx.moveTo(shoulder * 0.35, ty + torsoH * 0.1);
+    ctx.quadraticCurveTo(shoulder * 0.95, ty + torsoH * 0.2, hem * 0.9, ty + torsoH * 0.7);
+    ctx.quadraticCurveTo(waist * 0.4, ty + torsoH * 0.45, shoulder * 0.35, ty + torsoH * 0.1);
     ctx.fill();
-    // Chest highlight
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
-    roundRect(ctx, tx + torsoW * 0.16, ty + torsoH * 0.14, torsoW * 0.34, torsoH * 0.4, torsoW * 0.12);
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
+    ctx.beginPath();
+    ctx.ellipse(-torsoW * 0.08, ty + torsoH * 0.32, torsoW * 0.18, torsoH * 0.22, -0.2, 0, Math.PI * 2);
     ctx.fill();
   }
   // Neck scoop
   ctx.fillStyle = dna.skin;
   ctx.beginPath();
-  ctx.ellipse(0, ty + torsoH * 0.02, torsoW * 0.22, torsoH * 0.12, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, ty + torsoH * 0.02, torsoW * 0.2, torsoH * 0.11, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.35)";
-  ctx.lineWidth = Math.max(1, s * 0.08);
+  ctx.strokeStyle = "rgba(255,255,255,0.32)";
+  ctx.lineWidth = Math.max(1, s * 0.07);
   ctx.beginPath();
-  ctx.ellipse(0, ty + torsoH * 0.08, torsoW * 0.28, torsoH * 0.14, 0, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.ellipse(0, ty + torsoH * 0.07, torsoW * 0.26, torsoH * 0.12, 0, Math.PI * 1.08, Math.PI * 1.92);
   ctx.stroke();
-  // Side panels
+  // Soft side panels along the taper
   ctx.fillStyle = jerseyDark;
-  roundRect(ctx, tx, ty + torsoH * 0.18, torsoW * 0.14, torsoH * 0.7, torsoW * 0.06);
+  ctx.globalAlpha = 0.55;
+  ctx.beginPath();
+  ctx.moveTo(-shoulder * 0.88, ty + torsoH * 0.16);
+  ctx.lineTo(-shoulder * 0.62, ty + torsoH * 0.18);
+  ctx.lineTo(-hem * 0.85, ty + torsoH * 0.68);
+  ctx.lineTo(-hem, ty + torsoH * 0.66);
+  ctx.closePath();
   ctx.fill();
-  roundRect(
-    ctx,
-    tx + torsoW * 0.86,
-    ty + torsoH * 0.18,
-    torsoW * 0.14,
-    torsoH * 0.7,
-    torsoW * 0.06,
-  );
+  ctx.beginPath();
+  ctx.moveTo(shoulder * 0.88, ty + torsoH * 0.16);
+  ctx.lineTo(shoulder * 0.62, ty + torsoH * 0.18);
+  ctx.lineTo(hem * 0.85, ty + torsoH * 0.68);
+  ctx.lineTo(hem, ty + torsoH * 0.66);
+  ctx.closePath();
   ctx.fill();
-  // Jersey sheen
-  ctx.fillStyle = "rgba(255,255,255,0.14)";
-  roundRect(
-    ctx,
-    tx + torsoW * 0.18,
-    ty + torsoH * 0.12,
-    torsoW * 0.22,
-    torsoH * 0.55,
-    torsoW * 0.1,
-  );
-  ctx.fill();
+  ctx.globalAlpha = 1;
 
-  // Baggy shorts
-  const shortsGrad = ctx.createLinearGradient(0, ty + torsoH * 0.62, 0, ty + torsoH * 1.15);
+  // Baggy shorts with curved hem
+  const shortsTop = ty + torsoH * 0.58;
+  const shortsBot = ty + torsoH * 1.12;
+  const shortsGrad = ctx.createLinearGradient(0, shortsTop, 0, shortsBot);
   shortsGrad.addColorStop(0, shorts);
   shortsGrad.addColorStop(1, jerseyDark);
   ctx.fillStyle = shortsGrad;
-  roundRect(
-    ctx,
-    tx - torsoW * 0.06,
-    ty + torsoH * 0.62,
-    torsoW * 1.12,
-    torsoH * 0.55,
-    torsoW * 0.16,
-  );
-  ctx.fill();
-  // Waistband
-  ctx.fillStyle = "rgba(255,255,255,0.22)";
-  roundRect(
-    ctx,
-    tx - torsoW * 0.02,
-    ty + torsoH * 0.62,
-    torsoW * 1.04,
-    torsoH * 0.1,
-    torsoW * 0.06,
-  );
-  ctx.fill();
-  // Shorts split
-  ctx.strokeStyle = "rgba(0,0,0,0.18)";
-  ctx.lineWidth = Math.max(1, s * 0.06);
   ctx.beginPath();
-  ctx.moveTo(0, ty + torsoH * 0.78);
-  ctx.lineTo(0, ty + torsoH * 1.12);
+  ctx.moveTo(-torsoW * 0.52, shortsTop + torsoH * 0.04);
+  ctx.quadraticCurveTo(-torsoW * 0.55, shortsTop, -torsoW * 0.2, shortsTop);
+  ctx.lineTo(torsoW * 0.2, shortsTop);
+  ctx.quadraticCurveTo(torsoW * 0.55, shortsTop, torsoW * 0.52, shortsTop + torsoH * 0.04);
+  ctx.quadraticCurveTo(torsoW * 0.58, shortsBot - torsoH * 0.08, torsoW * 0.42, shortsBot);
+  ctx.quadraticCurveTo(0, shortsBot + torsoH * 0.04, -torsoW * 0.42, shortsBot);
+  ctx.quadraticCurveTo(-torsoW * 0.58, shortsBot - torsoH * 0.08, -torsoW * 0.52, shortsTop + torsoH * 0.04);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.2)";
+  ctx.beginPath();
+  ctx.ellipse(0, shortsTop + torsoH * 0.05, torsoW * 0.48, torsoH * 0.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.16)";
+  ctx.lineWidth = Math.max(1, s * 0.05);
+  ctx.beginPath();
+  ctx.moveTo(0, shortsTop + torsoH * 0.12);
+  ctx.quadraticCurveTo(torsoW * 0.02, shortsBot * 0.5 + shortsTop * 0.5, 0, shortsBot - torsoH * 0.04);
   ctx.stroke();
 
   drawLeg(front);
   drawArm(front);
 
-  // Big cartoon head (2K park style)
+  // Neck (tapered) then head
   const hx = 0;
-  const hy = ty - headR * 0.55;
-  drawFace(ctx, dna, hx, hy, headR, faceLive);
-
-  // Neck
+  const hy = ty - headR * 0.52;
   ctx.fillStyle = dna.skin;
-  roundRect(ctx, -headR * 0.28, hy + headR * 0.72, headR * 0.56, headR * 0.35, headR * 0.12);
+  ctx.beginPath();
+  ctx.moveTo(-headR * 0.22, hy + headR * 0.78);
+  ctx.lineTo(headR * 0.22, hy + headR * 0.78);
+  ctx.quadraticCurveTo(headR * 0.3, hy + headR * 1.05, headR * 0.26, hy + headR * 1.12);
+  ctx.lineTo(-headR * 0.26, hy + headR * 1.12);
+  ctx.quadraticCurveTo(-headR * 0.3, hy + headR * 1.05, -headR * 0.22, hy + headR * 0.78);
+  ctx.closePath();
   ctx.fill();
+  drawFace(ctx, dna, hx, hy, headR, faceLive);
 
   ctx.restore();
 

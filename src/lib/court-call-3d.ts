@@ -1,5 +1,6 @@
 /**
- * Elevated sideline 3D camera for Court Call.
+ * High-angle sideline camera for Court Call — looks down onto the floor
+ * so the court reads compact and players stay readable.
  * Court (laneX 0–50, alongY 0–94) → world (x=along, y=up, z=lane).
  */
 
@@ -21,12 +22,13 @@ export type Camera3D = {
   lane: number;
 };
 
-const CAM_HEIGHT = 26;
+const CAM_HEIGHT = 56;
 /** How far outside the near sideline the camera sits (world Z). */
-const CAM_OUTSIDE = 24;
+const CAM_OUTSIDE = 16;
 /** Point on the court width the camera aims at. */
-const LOOK_AT_LANE = 18;
-const FOV = 820;
+const LOOK_AT_LANE = 25;
+/** Lower = zoomed out (more court on screen). */
+const FOV = 720;
 
 export function courtToWorld(
   laneX: number,
@@ -92,7 +94,7 @@ export function projectWorld(
   const scale = FOV / cz;
   return {
     x: screenW * 0.5 + cx * scale,
-    y: screenH * 0.58 - cy * scale,
+    y: screenH * 0.52 - cy * scale,
     scale,
     depth: cz,
   };

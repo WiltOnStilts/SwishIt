@@ -314,36 +314,36 @@ function updateActorFaceLive(state: GameState, a: Actor, dt: number, now: number
     target.brow = -0.85;
     target.intense = 1;
   } else if (cutting) {
-    // Wide open mouth on a hard cut / blow-by
-    target.open = 0.88;
-    target.smile = 0.22;
-    target.brow = 0.65;
-    target.intense = 0.35;
+    // Effort yell — open enough to read, not a cartoon gape.
+    target.open = 0.55;
+    target.smile = 0.18;
+    target.brow = 0.55;
+    target.intense = 0.4;
   } else if (crashing) {
-    target.open = 0.72;
-    target.smile = 0.15;
-    target.brow = 0.45;
+    target.open = 0.42;
+    target.smile = 0.12;
+    target.brow = 0.35;
     target.intense = 0.55;
   } else if (hasBall && speed > 4) {
-    target.open = 0.28;
-    target.smile = 0.12;
+    target.open = 0.18;
+    target.smile = 0.1;
     target.brow = -0.45;
     target.intense = 0.75;
   } else if (hasBall) {
-    target.open = 0.12;
-    target.smile = 0.2;
+    target.open = 0.08;
+    target.smile = 0.18;
     target.brow = -0.25;
     target.intense = 0.45;
   } else if (guardingClose) {
-    target.open = 0.06;
+    target.open = 0.04;
     target.smile = 0.04;
     target.brow = -0.7;
     target.intense = 0.9;
   } else if (speed > 3.5) {
-    target.open = 0.38;
-    target.smile = 0.18;
-    target.brow = 0.2;
-    target.intense = 0.3;
+    target.open = 0.22;
+    target.smile = 0.14;
+    target.brow = 0.15;
+    target.intense = 0.28;
   }
   // Slightly faster open/close so cuts read immediately; brows ease a touch slower.
   lerpFaceLive(a.faceLive, target, dt, shooting || cutting ? 11 : 7.5);
@@ -712,7 +712,6 @@ export function CourtCallGame({
     shotClock: SHOT_CLOCK_SEC,
   });
   const [isTouch, setIsTouch] = useState(false);
-  const [isPortrait, setIsPortrait] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [intro, setIntro] = useState(true);
   const introRef = useRef(true);
@@ -724,18 +723,10 @@ export function CourtCallGame({
 
   useEffect(() => {
     const touchMq = window.matchMedia("(pointer: coarse)");
-    const orientMq = window.matchMedia("(orientation: portrait)");
-    const sync = () => {
-      setIsTouch(touchMq.matches);
-      setIsPortrait(orientMq.matches && touchMq.matches);
-    };
+    const sync = () => setIsTouch(touchMq.matches);
     sync();
     touchMq.addEventListener("change", sync);
-    orientMq.addEventListener("change", sync);
-    return () => {
-      touchMq.removeEventListener("change", sync);
-      orientMq.removeEventListener("change", sync);
-    };
+    return () => touchMq.removeEventListener("change", sync);
   }, []);
 
   useEffect(() => {
@@ -932,14 +923,8 @@ export function CourtCallGame({
   }, []);
 
   return (
-    <div className="flex h-[100dvh] max-h-[100dvh] flex-1 flex-col overflow-hidden">
-      {isPortrait ? (
-        <div className="mx-3 mt-1 shrink-0 rounded-xl border border-[var(--orange)]/40 bg-[var(--orange)]/10 px-3 py-1.5 text-center text-[11px] text-[var(--ink)] sm:hidden">
-          Rotate sideways for the best view — controls still work in portrait.
-        </div>
-      ) : null}
-
-      <header className="flex shrink-0 items-center justify-between gap-2 px-3 pt-1.5 pb-0.5">
+    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-[var(--bg,#0c0a09)]">
+      <header className="flex shrink-0 items-center justify-between gap-2 px-3 pt-[max(0.35rem,env(safe-area-inset-top))] pb-0.5">
         <button
           type="button"
           onClick={onExit}
@@ -947,10 +932,31 @@ export function CourtCallGame({
         >
           ← Exit
         </button>
-        <div className="font-[family-name:var(--font-display)] text-xl tracking-wide text-[var(--ink)] leading-none">
-          <span className="text-[var(--orange-hot)]">{hud.you}</span>
-          <span className="mx-1.5 text-[var(--muted)]">–</span>
-          <span>{hud.opp}</span>
+        <div className="flex min-w-0 flex-col items-center leading-none">
+          <div className="font-[family-name:var(--font-display)] text-lg tracking-wide text-[var(--ink)] sm:text-xl">
+            <span className="text-[var(--orange-hot)]">{hud.you}</span>
+            <span className="mx-1.5 text-[var(--muted)]">–</span>
+            <span>{hud.opp}</span>
+          </div>
+          <p className="mt-0.5 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">
+            <span className="text-[var(--orange-hot)]">
+              {you.year} {you.team.abbreviation}
+            </span>
+            <span className="text-sky-300">
+              {opp.year} {opp.team.abbreviation}
+            </span>
+            {!intro ? (
+              <span
+                className={`rounded-full border px-1.5 py-0.5 tabular-nums tracking-[0.12em] ${
+                  hud.shotClock <= 6
+                    ? "border-red-400/50 text-red-300"
+                    : "border-[var(--line)] text-[var(--muted)]"
+                }`}
+              >
+                {Math.ceil(Math.max(0, hud.shotClock))}
+              </span>
+            ) : null}
+          </p>
         </div>
         <div className="flex min-w-12 flex-col items-end leading-tight">
           <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
@@ -961,27 +967,6 @@ export function CourtCallGame({
           </span>
         </div>
       </header>
-
-      {/* Matchup lives above the court — not painted on the canvas. */}
-      <p className="mx-auto flex w-full max-w-6xl shrink-0 items-center justify-center gap-2 px-3 pb-0.5 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
-        <span className="text-[var(--orange-hot)]">
-          {you.year} {you.team.abbreviation}
-        </span>
-        <span className="text-sky-300">
-          {opp.year} {opp.team.abbreviation}
-        </span>
-        {!intro ? (
-          <span
-            className={`rounded-full border px-1.5 py-0.5 tabular-nums tracking-[0.12em] ${
-              hud.shotClock <= 6
-                ? "border-red-400/50 text-red-300"
-                : "border-[var(--line)] text-[var(--muted)]"
-            }`}
-          >
-            {Math.ceil(Math.max(0, hud.shotClock))}
-          </span>
-        ) : null}
-      </p>
 
       <div className="relative mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-hidden px-2">
         <canvas
@@ -1060,66 +1045,73 @@ export function CourtCallGame({
         ) : null}
       </div>
 
-      {/* Controls dock — compact so court + pads fit in one phone screen. */}
+      {/* Controls dock — one row: stick + spaced actions; difficulty tucked in. */}
       {!hud.over && !intro ? (
-        <div className="mx-auto flex w-full max-w-6xl shrink-0 flex-col gap-1 px-2 pb-1 pt-1">
-          <div className="flex items-center justify-center gap-1.5">
-            {(["easy", "normal", "hard"] as const).map((level) => (
-              <button
-                key={level}
-                type="button"
-                onClick={() => setDifficulty(level)}
-                className={`rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${
-                  difficulty === level
-                    ? "border-[var(--orange)] bg-[var(--orange)]/30 text-[var(--ink)]"
-                    : "border-[var(--line)] bg-black/40 text-[var(--muted)]"
-                }`}
-              >
-                {COURT_DIFFICULTY_LABELS[level]}
-              </button>
-            ))}
+        <div className="mx-auto flex w-full max-w-6xl shrink-0 flex-col gap-1 px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1">
+              {(["easy", "normal", "hard"] as const).map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => setDifficulty(level)}
+                  className={`rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.1em] ${
+                    difficulty === level
+                      ? "border-[var(--orange)] bg-[var(--orange)]/30 text-[var(--ink)]"
+                      : "border-[var(--line)] bg-black/40 text-[var(--muted)]"
+                  }`}
+                >
+                  {COURT_DIFFICULTY_LABELS[level]}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-label="Court Call info"
+              aria-expanded={infoOpen}
+              onClick={() => setInfoOpen(true)}
+              className="info-glow flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--orange)] bg-black/40 text-sm font-semibold italic leading-none text-[var(--orange-hot)]"
+            >
+              i
+            </button>
           </div>
 
           {isTouch ? (
-            <div className="flex items-end justify-between gap-2 pb-0.5">
+            <div className="flex items-center gap-3 sm:gap-4">
               <Joystick
                 visible
                 onChange={(nx, ny, active) => {
                   stickRef.current = { active, nx, ny };
                 }}
               />
-              <div className="grid w-[8.25rem] grid-cols-3 grid-rows-3 gap-1">
+              <div className="flex min-w-0 flex-1 items-center justify-evenly gap-1.5">
                 <ActionBtn label="Steal" onPress={() => queueAction("steal")} />
                 <ActionBtn label="Block" onPress={() => queueAction("block")} />
                 <ActionBtn label="Board" onPress={() => queueAction("rebound")} />
-                <span />
                 <ActionBtn label="Shoot" onPress={() => queueAction("shoot")} />
-                <span />
-                <span />
                 <ActionBtn label="Pass" onPress={() => queueAction("pass")} />
-                <span />
               </div>
             </div>
-          ) : null}
+          ) : (
+            <p className="pb-1 text-center text-[10px] text-[var(--muted)]">
+              Arrows/WASD = screen directions · Space shoot · K pass · F block · G
+              steal · H board · {COURT_DIFFICULTY_LABELS[difficulty]}
+            </p>
+          )}
         </div>
-      ) : null}
-
-      <div className="mx-auto flex w-full max-w-6xl shrink-0 items-center justify-center gap-2 px-3 pb-2 pt-0.5">
-        <button
-          type="button"
-          aria-label="Court Call info"
-          aria-expanded={infoOpen}
-          onClick={() => setInfoOpen(true)}
-          className="info-glow flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--orange)] bg-black/40 text-base font-semibold italic leading-none text-[var(--orange-hot)]"
-        >
-          i
-        </button>
-        <p className="text-[10px] text-[var(--muted)]">
-          {isTouch
-            ? "Stick = screen directions · tap i for tips"
-            : `Arrows/WASD = screen directions · Space shoot · K pass · F block · G steal · H board · ${COURT_DIFFICULTY_LABELS[difficulty]}`}
-        </p>
-      </div>
+      ) : (
+        <div className="mx-auto flex w-full max-w-6xl shrink-0 items-center justify-center gap-2 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1">
+          <button
+            type="button"
+            aria-label="Court Call info"
+            aria-expanded={infoOpen}
+            onClick={() => setInfoOpen(true)}
+            className="info-glow flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--orange)] bg-black/40 text-base font-semibold italic leading-none text-[var(--orange-hot)]"
+          >
+            i
+          </button>
+        </div>
+      )}
 
       {infoOpen ? (
         <div
@@ -1234,7 +1226,7 @@ function ActionBtn({
         e.preventDefault();
         onPress();
       }}
-      className="flex h-11 w-11 flex-col items-center justify-center rounded-full border border-[var(--orange)]/70 bg-black/55 text-[8px] font-bold uppercase leading-tight tracking-wide text-[var(--ink)] active:bg-[var(--orange)]/40 landscape:h-10 landscape:w-10"
+      className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-full border border-[var(--orange)]/70 bg-black/55 text-[7px] font-bold uppercase leading-tight tracking-wide text-[var(--ink)] active:bg-[var(--orange)]/40 sm:h-11 sm:w-11 sm:text-[8px]"
     >
       <span>{label}</span>
       {sub ? <span className="text-[8px] text-[var(--muted)]">{sub}</span> : null}
@@ -1275,7 +1267,7 @@ function Joystick({
   return (
     <div
       ref={baseRef}
-      className="relative z-10 h-20 w-20 shrink-0 touch-none rounded-full border border-[var(--line)] bg-black/45 landscape:h-[4.5rem] landscape:w-[4.5rem]"
+      className="relative z-10 h-[4.25rem] w-[4.25rem] shrink-0 touch-none rounded-full border border-[var(--line)] bg-black/45 sm:h-20 sm:w-20"
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
         update(e.clientX, e.clientY, true);
