@@ -74,7 +74,7 @@ export const COURT_CALL_STEPS = [
   "Choose a blacktop format: 1v1, 2v2, 3v3, 4v4, or 5v5.",
   "Pick your team and the opponent with search or the year/team arrows — or tip off a random matchup.",
   "Lock one player before tip-off — you control that player the whole game (no mid-game switches).",
-  "Move with the left joystick on phone, or WASD / arrow keys on desktop.",
+  "Move with the left joystick on phone, or WASD / arrow keys on desktop — directions follow the screen (up = up the court, right = toward your hoop).",
   "Desktop: Space shoot, K pass, F block, G steal, H rebound. Mobile pad: Shoot, Pass, Block, Steal, Board. You dribble automatically — rebounds only grab on H / Board when you're next to a loose ball.",
   "Shooting uses a timing meter — green is money, yellow is okay, red is off. It speeds up when you're guarded or far from the rim, and freezes briefly after you release.",
   "Difficulty (Easy / Normal / Hard) sits under the court with the mobile controls.",
