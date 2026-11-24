@@ -3,16 +3,16 @@ import CourtCallClient from "./court-call-client";
 import { breadcrumbJsonLd } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Court Call — 5-on-5 Arcade Basketball · SwishIt",
+  title: "Court Call — Blacktop 1v1 to 5v5 · SwishIt",
   description:
-    "Tip off Court Call on SwishIt: pick any all-time NBA roster, lock your player, and play live 5-on-5 arcade basketball—pass, shoot, steal, and rebound with joystick or keyboard.",
+    "Tip off Court Call on SwishIt: outdoor blacktop basketball from 1v1 to 5v5. Pick any all-time NBA roster, lock your player, and play arcade pass, shoot, steal, and rebound.",
   alternates: {
     canonical: "/court-call",
   },
   openGraph: {
-    title: "Court Call — 5-on-5 Arcade Basketball · SwishIt",
+    title: "Court Call — Blacktop 1v1 to 5v5 · SwishIt",
     description:
-      "All-time roster 5-on-5 arcade basketball. Pick your squad and tip off on SwishIt.",
+      "Street-park basketball with all-time rosters. Choose 1v1 through 5v5 and tip off on SwishIt.",
     url: "/court-call",
   },
 };

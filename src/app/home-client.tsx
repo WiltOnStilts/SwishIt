@@ -117,8 +117,8 @@ export default function HomeClient() {
               Court Call
             </p>
             <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
-              5-on-5 arcade basketball. Pick any all-time team, then move,
-              pass, shoot, steal, and board.
+              Outdoor blacktop from 1v1 to 5v5. Pick any all-time team, then
+              move, pass, shoot, steal, and board.
             </p>
             <span className="mt-4 inline-flex text-xs font-bold uppercase tracking-[0.2em] text-[var(--ink)]">
               Tip off →
@@ -151,9 +151,9 @@ export default function HomeClient() {
           </p>
           <p>
             <span className="font-bold text-[var(--ink)]">Court Call</span> is
-            live 5-on-5. Search any historical roster (or tip off random), then
-            control your player with a joystick or keys—shoot, pass, steal, and
-            rebound.
+            outdoor blacktop from 1v1 to 5v5. Search any historical roster (or
+            tip off random), then control your player with a joystick or
+            keys—shoot, pass, steal, and rebound.
           </p>
         </section>
 
@@ -184,7 +184,7 @@ export default function HomeClient() {
             </li>
             <li>
               <span className="font-bold text-[var(--ink)]">Court Call.</span>{" "}
-              Pick a team and play 5-on-5 with simple arcade controls.
+              Pick a format from 1v1 to 5v5 and tip off on the blacktop.
             </li>
             <li>
               <span className="font-bold text-[var(--ink)]">Ads.</span> Google

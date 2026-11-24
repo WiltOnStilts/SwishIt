@@ -7,26 +7,31 @@ import { HowToButton } from "@/components/how-to-play";
 import type { CourtPos, LineupPlayer } from "@/lib/season";
 import {
   buildLineup,
+  buildSquad,
   COURT_CALL_STEPS,
+  COURT_FORMATS,
+  FORMAT_LABELS,
+  FORMAT_SLOTS,
   filterRosters,
   rosterLabel,
   type CourtCallMeta,
+  type CourtFormat,
   type CourtSquad,
   type RosterOption,
   type TeamMeta,
 } from "@/lib/court-call";
 
-const SLOTS: CourtPos[] = ["PG", "SG", "SF", "PF", "C"];
-
-async function loadSquad(year: number, team: TeamMeta): Promise<CourtSquad | null> {
+async function loadSquad(
+  year: number,
+  team: TeamMeta,
+  format: CourtFormat,
+): Promise<CourtSquad | null> {
   const res = await fetch(
     `/api/undefeated/players?year=${year}&teamId=${encodeURIComponent(team.id)}`,
   );
   const data = (await res.json()) as { players?: LineupPlayer[]; error?: string };
   if (!data.players) return null;
-  const lineup = buildLineup(data.players);
-  if (!lineup) return null;
-  return { year, team, lineup };
+  return buildSquad(year, team, data.players, format);
 }
 
 function pickRandomOther(pool: RosterOption[], avoid: RosterOption): RosterOption {
@@ -51,6 +56,7 @@ export default function CourtCallPage() {
   const [oppYear, setOppYear] = useState<number | null>(null);
   const [oppTeamId, setOppTeamId] = useState<string | null>(null);
   const [lockSlot, setLockSlot] = useState<CourtPos>("PG");
+  const [format, setFormat] = useState<CourtFormat>(3);
 
   const [starting, setStarting] = useState(false);
   const [match, setMatch] = useState<{
@@ -58,6 +64,14 @@ export default function CourtCallPage() {
     opp: CourtSquad;
     lockSlot: CourtPos;
   } | null>(null);
+
+  const formatSlots = FORMAT_SLOTS[format];
+
+  useEffect(() => {
+    if (!formatSlots.includes(lockSlot)) {
+      setLockSlot(formatSlots[0] ?? "PG");
+    }
+  }, [format, formatSlots, lockSlot]);
 
   useEffect(() => {
     fetch("/api/undefeated/meta")
@@ -154,14 +168,15 @@ export default function CourtCallPage() {
     setError(null);
     try {
       const [you, opp] = await Promise.all([
-        loadSquad(youOpt.year, youOpt.team),
-        loadSquad(oppOpt.year, oppOpt.team),
+        loadSquad(youOpt.year, youOpt.team, format),
+        loadSquad(oppOpt.year, oppOpt.team, format),
       ]);
       if (!you || !opp) {
         setError("Could not build lineups for that matchup.");
         return;
       }
-      setMatch({ you, opp, lockSlot: slot });
+      const safeSlot = you.slots.includes(slot) ? slot : you.slots[0]!;
+      setMatch({ you, opp, lockSlot: safeSlot });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -183,7 +198,8 @@ export default function CourtCallPage() {
     const youOpt =
       meta.rosterPool[Math.floor(Math.random() * meta.rosterPool.length)]!;
     const oppOpt = pickRandomOther(meta.rosterPool, youOpt);
-    const slot = SLOTS[Math.floor(Math.random() * SLOTS.length)]!;
+    const slots = FORMAT_SLOTS[format];
+    const slot = slots[Math.floor(Math.random() * slots.length)]!;
     setLockSlot(slot);
     void startMatch(youOpt, oppOpt, slot);
   };
@@ -215,9 +231,8 @@ export default function CourtCallPage() {
         Court Call
       </h1>
       <p className="mt-2 text-center text-sm leading-relaxed text-[var(--muted)]">
-        Pick your squad, lock your player, and choose who you&apos;re facing.
-        Live 5-on-5 arcade basketball with all-time NBA rosters—move, pass,
-        shoot, steal, and board.
+        Outdoor blacktop basketball. Pick 1v1 through 5v5, lock your player,
+        and tip off against any all-time roster.
       </p>
 
       {loading ? (
@@ -235,7 +250,32 @@ export default function CourtCallPage() {
         <p className="mt-10 text-center text-sm text-[var(--bad)]">{error}</p>
       ) : meta ? (
         <>
-          <label className="mt-8 block text-xs font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
+          <div className="mt-8">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
+              Blacktop format
+            </p>
+            <div className="mt-2 grid grid-cols-5 gap-1.5">
+              {COURT_FORMATS.map((f) => {
+                const selected = format === f;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFormat(f)}
+                    className={`rounded-xl border px-1 py-2.5 text-center text-xs font-bold uppercase tracking-[0.08em] transition ${
+                      selected
+                        ? "border-[var(--orange)] bg-[var(--orange)]/25 text-[var(--ink)]"
+                        : "border-[var(--line)] text-[var(--muted)] hover:border-[var(--orange)]/50"
+                    }`}
+                  >
+                    {FORMAT_LABELS[f]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <label className="mt-6 block text-xs font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
             Search teams
             <input
               value={query}
@@ -297,6 +337,7 @@ export default function CourtCallPage() {
             <PlayerLockPicker
               year={youYear}
               team={youTeam}
+              slots={formatSlots}
               lockSlot={lockSlot}
               onLock={setLockSlot}
             />
@@ -438,11 +479,13 @@ function TeamPicker({
 function PlayerLockPicker({
   year,
   team,
+  slots,
   lockSlot,
   onLock,
 }: {
   year: number;
   team: TeamMeta;
+  slots: CourtPos[];
   lockSlot: CourtPos;
   onLock: (slot: CourtPos) => void;
 }) {
@@ -479,8 +522,9 @@ function PlayerLockPicker({
         <p className="mt-3 text-sm text-[var(--muted)]">Loading roster…</p>
       ) : (
         <ul className="mt-3 space-y-1.5">
-          {SLOTS.map((slot) => {
+          {slots.map((slot) => {
             const p = lineup[slot];
+            if (!p) return null;
             const selected = lockSlot === slot;
             return (
               <li key={slot}>

@@ -50,6 +50,7 @@ const homeJsonLd = {
           position: 4,
           name: "Court Call",
           url: `${SITE_URL}/court-call`,
+          description: "Blacktop 1v1 to 5v5 arcade basketball",
         },
       ],
     },

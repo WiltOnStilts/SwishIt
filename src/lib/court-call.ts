@@ -3,6 +3,27 @@ import { canPlaySlot } from "@/lib/season";
 
 export type CourtDifficulty = "easy" | "normal" | "hard";
 
+export type CourtFormat = 1 | 2 | 3 | 4 | 5;
+
+/** Which lineup slots are active for each blacktop format. */
+export const FORMAT_SLOTS: Record<CourtFormat, CourtPos[]> = {
+  1: ["PG"],
+  2: ["PG", "SG"],
+  3: ["PG", "SF", "C"],
+  4: ["PG", "SG", "SF", "PF"],
+  5: ["PG", "SG", "SF", "PF", "C"],
+};
+
+export const FORMAT_LABELS: Record<CourtFormat, string> = {
+  1: "1v1",
+  2: "2v2",
+  3: "3v3",
+  4: "4v4",
+  5: "5v5",
+};
+
+export const COURT_FORMATS: CourtFormat[] = [1, 2, 3, 4, 5];
+
 export const COURT_DIFFICULTY_LABELS: Record<CourtDifficulty, string> = {
   easy: "Easy",
   normal: "Normal",
@@ -50,8 +71,9 @@ export function difficultyTuning(level: CourtDifficulty): DifficultyTuning {
 }
 
 export const COURT_CALL_STEPS = [
+  "Choose a blacktop format: 1v1, 2v2, 3v3, 4v4, or 5v5.",
   "Pick your team and the opponent with search or the year/team arrows — or tip off a random matchup.",
-  "Lock one starter before tip-off — you control that player the whole game (no mid-game switches).",
+  "Lock one player before tip-off — you control that player the whole game (no mid-game switches).",
   "Move with the left joystick on phone, or WASD / arrow keys on desktop.",
   "Desktop: Space shoot, K pass, F block, G steal, H rebound. Mobile pad: Shoot, Pass, Block, Steal, Board. You dribble automatically — rebounds only grab on H / Board when you're next to a loose ball.",
   "Shooting uses a timing meter — green is money, yellow is okay, red is off. It speeds up when you're guarded or far from the rim, and freezes briefly after you release.",
@@ -106,9 +128,11 @@ export type CourtSquad = {
   year: number;
   team: TeamMeta;
   lineup: Record<CourtPos, LineupPlayer>;
+  /** Active slots for this blacktop format (subset of the full five). */
+  slots: CourtPos[];
 };
 
-const SLOTS: CourtPos[] = ["PG", "SG", "SF", "PF", "C"];
+const ALL_SLOTS: CourtPos[] = ["PG", "SG", "SF", "PF", "C"];
 
 function playerPower(p: LineupPlayer): number {
   return (
@@ -123,13 +147,23 @@ function playerPower(p: LineupPlayer): number {
   );
 }
 
-/** Best available starter at each spot from a roster. */
-export function buildLineup(players: LineupPlayer[]): Record<CourtPos, LineupPlayer> | null {
-  if (players.length < 5) return null;
+/** Best available starter at each spot from a roster (full five). */
+export function buildLineup(
+  players: LineupPlayer[],
+): Record<CourtPos, LineupPlayer> | null {
+  return buildLineupForSlots(players, ALL_SLOTS);
+}
+
+/** Best available starters for the slots used by a blacktop format. */
+export function buildLineupForSlots(
+  players: LineupPlayer[],
+  slots: CourtPos[],
+): Record<CourtPos, LineupPlayer> | null {
+  if (players.length < slots.length) return null;
   const used = new Set<string>();
   const lineup = {} as Record<CourtPos, LineupPlayer>;
 
-  for (const slot of SLOTS) {
+  for (const slot of slots) {
     const candidates = players
       .filter((p) => !used.has(p.id) && canPlaySlot(p, slot))
       .sort((a, b) => playerPower(b) - playerPower(a));
@@ -142,7 +176,37 @@ export function buildLineup(players: LineupPlayer[]): Record<CourtPos, LineupPla
     used.add(pick.id);
     lineup[slot] = pick;
   }
+
+  // Fill unused slots with leftovers so Record<CourtPos, …> stays complete for typing.
+  for (const slot of ALL_SLOTS) {
+    if (lineup[slot]) continue;
+    const leftover = players
+      .filter((p) => !used.has(p.id))
+      .sort((a, b) => playerPower(b) - playerPower(a))[0];
+    if (!leftover) {
+      // Duplicate the strongest already-picked player as a stub fill.
+      const any = Object.values(lineup)[0];
+      if (!any) return null;
+      lineup[slot] = any;
+      continue;
+    }
+    used.add(leftover.id);
+    lineup[slot] = leftover;
+  }
+
   return lineup;
+}
+
+export function buildSquad(
+  year: number,
+  team: TeamMeta,
+  players: LineupPlayer[],
+  format: CourtFormat,
+): CourtSquad | null {
+  const slots = FORMAT_SLOTS[format];
+  const lineup = buildLineupForSlots(players, slots);
+  if (!lineup) return null;
+  return { year, team, lineup, slots };
 }
 
 export function rosterLabel(option: RosterOption): string {

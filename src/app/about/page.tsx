@@ -59,7 +59,7 @@ export default function AboutPage() {
         </p>
         <p>
           <span className="font-bold text-[var(--ink)]">Court Call</span> is
-          arcade 5-on-5: pick any all-time team, tip off, and play with a
+          outdoor blacktop from 1v1 to 5v5: pick any all-time team, tip off, and play with a
           joystick or keyboard—pass, shoot, steal, and rebound.
         </p>
 

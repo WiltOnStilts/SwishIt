@@ -16,6 +16,14 @@ import {
 } from "@/lib/court-call";
 import { faceDnaFromName, lastNameOf, type FaceDna } from "@/lib/player-face";
 import {
+  fillProjectedPoly,
+  projectCourt,
+  projectGroundPoly,
+  strokeProjectedLine,
+  strokeProjectedPoly,
+  type Camera3D,
+} from "@/lib/court-call-3d";
+import {
   drawCourtCallSprite,
   lerpFaceLive,
   restingFaceLive,
@@ -144,11 +152,11 @@ type GameState = {
 
 const W = 50;
 const H = 94;
-/** Visible camera window — shorter than full court so the view can pan. */
+/** Legacy pan clamps (court units) for the 3D sideline camera. */
 const VIEW_W = 50;
-const VIEW_H = 54;
-const PLAYER_R = 2.9;
-const PLAYER_GAP = 0.7;
+const VIEW_H = 56;
+const PLAYER_R = 2.55;
+const PLAYER_GAP = 0.85;
 const BALL_R = 0.72;
 const QUARTER_SEC = 60;
 const SHOT_CLOCK_SEC = 24;
@@ -175,28 +183,57 @@ function dist(ax: number, ay: number, bx: number, by: number) {
   return Math.hypot(ax - bx, ay - by);
 }
 
+function formatOffsets(
+  slots: CourtPos[],
+  side: Side,
+): Partial<Record<CourtPos, [number, number]>> {
+  const n = slots.length;
+  const baseY = side === "you" ? 68 : 26;
+  const depthStep = side === "you" ? 5.5 : -5.5;
+  const out: Partial<Record<CourtPos, [number, number]>> = {};
+  if (n === 1) {
+    out[slots[0]!] = [25, baseY];
+    return out;
+  }
+  if (n === 2) {
+    out[slots[0]!] = [18, baseY];
+    out[slots[1]!] = [32, baseY + depthStep * 0.35];
+    return out;
+  }
+  if (n === 3) {
+    out[slots[0]!] = [25, baseY];
+    out[slots[1]!] = [12, baseY + depthStep * 0.55];
+    out[slots[2]!] = [38, baseY + depthStep * 0.55];
+    return out;
+  }
+  if (n === 4) {
+    out[slots[0]!] = [20, baseY];
+    out[slots[1]!] = [30, baseY];
+    out[slots[2]!] = [12, baseY + depthStep];
+    out[slots[3]!] = [38, baseY + depthStep];
+    return out;
+  }
+  // 5v5
+  out.PG = [25, baseY];
+  out.SG = [11, baseY + depthStep * 0.45];
+  out.SF = [39, baseY + depthStep * 0.45];
+  out.PF = [16, baseY + depthStep * 1.35];
+  out.C = [34, baseY + depthStep * 1.45];
+  return out;
+}
+
 function makeActors(you: CourtSquad, opp: CourtSquad): Actor[] {
-  const youOffsets: Record<CourtPos, [number, number]> = {
-    PG: [25, 66],
-    SG: [11, 70],
-    SF: [39, 70],
-    PF: [16, 80],
-    C: [34, 82],
-  };
-  const oppOffsets: Record<CourtPos, [number, number]> = {
-    PG: [25, 28],
-    SG: [39, 24],
-    SF: [11, 24],
-    PF: [34, 14],
-    C: [16, 12],
-  };
+  const slots = you.slots.length ? you.slots : SLOTS;
+  const youOffsets = formatOffsets(slots, "you");
+  const oppOffsets = formatOffsets(slots, "opp");
 
   const out: Actor[] = [];
-  for (const slot of SLOTS) {
+  for (const slot of slots) {
     const yp = you.lineup[slot];
     const op = opp.lineup[slot];
-    const [yx, yy] = youOffsets[slot];
-    const [ox, oy] = oppOffsets[slot];
+    if (!yp || !op) continue;
+    const [yx, yy] = youOffsets[slot] ?? [25, 66];
+    const [ox, oy] = oppOffsets[slot] ?? [25, 28];
     const youDna = faceDnaFromName(yp.playerName);
     const oppDna = faceDnaFromName(op.playerName);
     out.push({
@@ -675,6 +712,7 @@ export function CourtCallGame({
     shotClock: SHOT_CLOCK_SEC,
   });
   const [isTouch, setIsTouch] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [intro, setIntro] = useState(true);
   const introRef = useRef(true);
@@ -685,7 +723,22 @@ export function CourtCallGame({
   }, [difficulty]);
 
   useEffect(() => {
-    setIsTouch(window.matchMedia("(pointer: coarse)").matches);
+    const touchMq = window.matchMedia("(pointer: coarse)");
+    const orientMq = window.matchMedia("(orientation: portrait)");
+    const sync = () => {
+      setIsTouch(touchMq.matches);
+      setIsPortrait(orientMq.matches && touchMq.matches);
+    };
+    sync();
+    touchMq.addEventListener("change", sync);
+    orientMq.addEventListener("change", sync);
+    return () => {
+      touchMq.removeEventListener("change", sync);
+      orientMq.removeEventListener("change", sync);
+    };
+  }, []);
+
+  useEffect(() => {
     setIntro(true);
     introRef.current = true;
     const state = createState(you, opp, lockSlot);
@@ -877,6 +930,13 @@ export function CourtCallGame({
 
   return (
     <div className="flex flex-1 flex-col">
+      {isPortrait ? (
+        <div className="mx-3 mt-3 rounded-2xl border border-[var(--orange)]/40 bg-[var(--orange)]/10 px-4 py-3 text-center text-sm text-[var(--ink)] sm:hidden">
+          Rotate your phone sideways — Court Call is built for a horizontal 3D
+          court.
+        </div>
+      ) : null}
+
       <header className="flex items-center justify-between gap-2 px-3 pt-3">
         <button
           type="button"
@@ -901,7 +961,7 @@ export function CourtCallGame({
       </header>
 
       {/* Matchup lives above the court — not painted on the canvas. */}
-      <p className="mx-auto mt-2 flex w-full max-w-lg items-center justify-center gap-3 px-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
+      <p className="mx-auto mt-2 flex w-full max-w-6xl items-center justify-center gap-3 px-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
         <span className="text-[var(--orange-hot)]">
           {you.year} {you.team.abbreviation}
         </span>
@@ -924,11 +984,11 @@ export function CourtCallGame({
         ) : null}
       </p>
 
-      <div className="relative mx-auto mt-1.5 w-full max-w-lg overflow-hidden px-2">
+      <div className="relative mx-auto mt-1.5 w-full max-w-6xl overflow-hidden px-2">
         <canvas
           ref={canvasRef}
-          className="h-auto max-h-[min(52vh,28rem)] w-full touch-none rounded-xl border border-[var(--line)] bg-[#1a120c] sm:max-h-[min(62vh,34rem)]"
-          style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
+          className="h-auto max-h-[min(48vh,22rem)] w-full touch-none rounded-xl border border-[var(--line)] bg-[#0c1220] landscape:max-h-[min(72vh,36rem)] sm:max-h-[min(68vh,38rem)]"
+          style={{ aspectRatio: "16 / 9" }}
         />
 
         {intro ? (
@@ -1004,7 +1064,7 @@ export function CourtCallGame({
 
       {/* Controls dock under the court — keeps the play surface clear. */}
       {!hud.over && !intro ? (
-        <div className="mx-auto mt-2 flex w-full max-w-lg flex-col gap-2 px-3 pb-1">
+        <div className="mx-auto mt-2 flex w-full max-w-6xl flex-col gap-2 px-3 pb-1">
           <div className="flex items-center justify-center gap-2">
             {(["easy", "normal", "hard"] as const).map((level) => (
               <button
@@ -1046,7 +1106,7 @@ export function CourtCallGame({
         </div>
       ) : null}
 
-      <div className="mx-auto flex w-full max-w-lg items-center justify-center gap-3 px-4 pb-3 pt-2">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-center gap-3 px-4 pb-3 pt-2">
         <button
           type="button"
           aria-label="Court Call info"
@@ -2313,14 +2373,13 @@ function resolveShot(
 function updateCamera(state: GameState, dt: number) {
   const controlled = state.actors.find((a) => a.id === state.controlId);
   if (!controlled) return;
-  // Camera locked to your player only — never tracks the ball.
-  const halfW = VIEW_W / 2;
-  const halfH = VIEW_H / 2;
-  const targetX = clamp(controlled.x, halfW, W - halfW);
-  const targetY = clamp(controlled.y, halfH, H - halfH);
-  const lerp = 1 - Math.exp(-4.5 * dt);
-  state.camX += (targetX - state.camX) * lerp;
-  state.camY += (targetY - state.camY) * lerp;
+  // Sideline 3D camera: pan along the court length, ease across the lane.
+  const halfAlong = VIEW_H / 2;
+  const targetLane = clamp(controlled.x * 0.35 + 25 * 0.65, 16, W - 16);
+  const targetAlong = clamp(controlled.y, halfAlong, H - halfAlong);
+  const lerp = 1 - Math.exp(-4.2 * dt);
+  state.camX += (targetLane - state.camX) * lerp;
+  state.camY += (targetAlong - state.camY) * lerp;
 }
 
 function stepFx(state: GameState, dt: number) {
@@ -2454,98 +2513,89 @@ function drawBasketball(
   ctx.fill();
 }
 
-/** netDir: +1 net hangs toward +y (top hoop), -1 toward -y (bottom hoop). */
-function drawHoop(
+/** Street-park hoop: padded pole, white board, bright rim, white net. */
+const woodTile = typeof Image !== "undefined" ? new Image() : null;
+const crowdStrip = typeof Image !== "undefined" ? new Image() : null;
+let woodReady = false;
+let crowdReady = false;
+if (woodTile) {
+  woodTile.onload = () => {
+    woodReady = true;
+  };
+  woodTile.src = "/court-call/court-wood-tile.jpg";
+}
+if (crowdStrip) {
+  crowdStrip.onload = () => {
+    crowdReady = true;
+  };
+  crowdStrip.src = "/court-call/park-crowd-strip.jpg";
+}
+
+function drawHoop3D(
   ctx: CanvasRenderingContext2D,
-  toScreen: (wx: number, wy: number) => { x: number; y: number },
-  scale: number,
-  hx: number,
-  hy: number,
+  cam: Camera3D,
+  screenW: number,
+  screenH: number,
+  alongY: number,
   netDir: 1 | -1,
   active: boolean,
   pulse: number,
 ) {
-  const rim = toScreen(hx, hy);
-  const boardWorld = toScreen(hx, hy - netDir * 1.65);
-  const armEnd = toScreen(hx, hy - netDir * 0.35);
-  const stanchion = toScreen(hx, hy - netDir * 3.4);
+  const lane = 25;
+  const rim = projectCourt(lane, alongY, cam, screenW, screenH, 3.2);
+  const board = projectCourt(lane, alongY - netDir * 1.2, cam, screenW, screenH, 4.4);
+  const poleBase = projectCourt(lane, alongY - netDir * 2.2, cam, screenW, screenH, 0);
+  const poleTop = projectCourt(lane, alongY - netDir * 1.5, cam, screenW, screenH, 4.0);
+  if (!rim || !board || !poleBase || !poleTop) return;
 
-  // Stanchion / support
-  ctx.strokeStyle = "rgba(180,190,210,0.55)";
-  ctx.lineWidth = Math.max(2, scale * 0.28);
+  const s = rim.scale;
+
+  // Pole
+  ctx.strokeStyle = "#9ca3af";
+  ctx.lineWidth = Math.max(3, s * 0.28);
+  ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(stanchion.x, stanchion.y);
-  ctx.lineTo(boardWorld.x, boardWorld.y);
+  ctx.moveTo(poleBase.x, poleBase.y);
+  ctx.lineTo(poleTop.x, poleTop.y);
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(boardWorld.x, boardWorld.y + netDir * 0.4 * scale);
-  ctx.lineTo(armEnd.x, armEnd.y);
+  ctx.moveTo(poleTop.x, poleTop.y);
+  ctx.lineTo(board.x, board.y);
   ctx.stroke();
 
-  // Backboard
-  const bw = 5.2 * scale;
-  const bh = 3.1 * scale;
-  ctx.fillStyle = active ? "rgba(248,250,252,0.92)" : "rgba(226,232,240,0.82)";
-  ctx.strokeStyle = active ? "rgba(249,115,22,0.85)" : "rgba(148,163,184,0.7)";
-  ctx.lineWidth = Math.max(1.5, scale * 0.14);
-  ctx.fillRect(boardWorld.x - bw / 2, boardWorld.y - bh / 2, bw, bh);
-  ctx.strokeRect(boardWorld.x - bw / 2, boardWorld.y - bh / 2, bw, bh);
-  // Inner square (shooter's box)
-  const iw = 2.2 * scale;
-  const ih = 1.5 * scale;
-  ctx.strokeStyle = active ? "rgba(239,68,68,0.9)" : "rgba(248,113,113,0.65)";
-  ctx.lineWidth = Math.max(1.2, scale * 0.12);
-  ctx.strokeRect(boardWorld.x - iw / 2, boardWorld.y - ih / 2 + netDir * 0.15 * scale, iw, ih);
+  // Backboard (billboard quad)
+  const bw = 2.8 * s;
+  const bh = 1.7 * s;
+  ctx.fillStyle = active ? "#f8fafc" : "#e2e8f0";
+  ctx.strokeStyle = "#64748b";
+  ctx.lineWidth = Math.max(1.5, s * 0.12);
+  ctx.fillRect(board.x - bw / 2, board.y - bh / 2, bw, bh);
+  ctx.strokeRect(board.x - bw / 2, board.y - bh / 2, bw, bh);
+  ctx.strokeStyle = active ? "#ef4444" : "#f87171";
+  ctx.strokeRect(board.x - bw * 0.22, board.y - bh * 0.18, bw * 0.44, bh * 0.42);
 
-  // Rim (orange ring)
-  const rimR = 1.55 * scale * (active ? pulse : 1);
+  // Rim ellipse
+  const rimR = 0.95 * s * (active ? pulse : 1);
   ctx.beginPath();
-  ctx.ellipse(rim.x, rim.y, rimR, rimR * 0.42, 0, 0, Math.PI * 2);
+  ctx.ellipse(rim.x, rim.y, rimR, rimR * 0.35, 0, 0, Math.PI * 2);
   ctx.strokeStyle = active ? "#fb923c" : "#ea580c";
-  ctx.lineWidth = Math.max(2.2, scale * 0.28);
-  ctx.stroke();
-  // Rim front lip highlight
-  ctx.beginPath();
-  ctx.ellipse(rim.x, rim.y, rimR * 0.92, rimR * 0.32, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255,237,213,0.35)";
-  ctx.lineWidth = Math.max(1, scale * 0.1);
+  ctx.lineWidth = Math.max(2.4, s * 0.22);
   ctx.stroke();
 
   // Net
-  const netLen = 2.4 * scale;
-  const netBottomY = rim.y + netDir * netLen;
-  const strands = 8;
-  ctx.strokeStyle = active ? "rgba(255,255,255,0.85)" : "rgba(226,232,240,0.7)";
-  ctx.lineWidth = Math.max(1, scale * 0.09);
-  for (let i = 0; i < strands; i++) {
-    const t = (i / (strands - 1)) * 2 - 1;
-    const topX = rim.x + t * rimR * 0.85;
-    const botX = rim.x + t * rimR * 0.35;
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = Math.max(1, s * 0.08);
+  const netLen = 1.4 * s;
+  for (let i = 0; i < 8; i++) {
+    const t = (i / 7) * 2 - 1;
     ctx.beginPath();
-    ctx.moveTo(topX, rim.y + netDir * rimR * 0.15);
+    ctx.moveTo(rim.x + t * rimR * 0.85, rim.y);
     ctx.quadraticCurveTo(
-      (topX + botX) / 2 + (i % 2 === 0 ? 0.25 : -0.25) * scale,
-      rim.y + netDir * netLen * 0.45,
-      botX,
-      netBottomY,
+      rim.x + t * rimR * 0.45,
+      rim.y + netLen * 0.45,
+      rim.x + t * rimR * 0.28,
+      rim.y + netLen,
     );
-    ctx.stroke();
-  }
-  // Horizontal net webbing
-  for (let row = 1; row <= 3; row++) {
-    const yy = rim.y + netDir * (netLen * (row / 4));
-    const spread = rimR * (0.85 - row * 0.15);
-    ctx.beginPath();
-    ctx.moveTo(rim.x - spread, yy);
-    ctx.lineTo(rim.x + spread, yy);
-    ctx.stroke();
-  }
-
-  if (active) {
-    ctx.beginPath();
-    ctx.arc(rim.x, rim.y, rimR * 1.7, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(251,146,60,0.35)";
-    ctx.lineWidth = 2;
     ctx.stroke();
   }
 }
@@ -2570,154 +2620,267 @@ function drawCourt(
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const scale = Math.min(cssW / VIEW_W, cssH / VIEW_H);
-  const originX = state.camX - VIEW_W / 2;
-  const originY = state.camY - VIEW_H / 2;
-  const toScreen = (wx: number, wy: number) => ({
-    x: (wx - originX) * scale,
-    y: (wy - originY) * scale,
-  });
+  const cam: Camera3D = { along: state.camY, lane: state.camX };
 
-  // Floor
-  ctx.fillStyle = "#2a1a10";
+  // Landscape sky
+  const sky = ctx.createLinearGradient(0, 0, 0, cssH);
+  sky.addColorStop(0, "#7dd3fc");
+  sky.addColorStop(0.45, "#bae6fd");
+  sky.addColorStop(1, "#334155");
+  ctx.fillStyle = sky;
   ctx.fillRect(0, 0, cssW, cssH);
 
-  // Subtle moving floor sheen
-  const sheen = ((now / 40) % (cssW + 120)) - 60;
-  const grad = ctx.createLinearGradient(sheen, 0, sheen + 140, cssH);
-  grad.addColorStop(0, "rgba(249,115,22,0)");
-  grad.addColorStop(0.5, "rgba(249,115,22,0.07)");
-  grad.addColorStop(1, "rgba(249,115,22,0)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cssW, cssH);
+  // Far crowd billboard
+  if (crowdReady && crowdStrip) {
+    const far = projectCourt(48, state.camY, cam, cssW, cssH, 8);
+    if (far) {
+      const ch = Math.max(70, far.scale * 14);
+      const cw = cssW * 1.15;
+      ctx.globalAlpha = 0.88;
+      ctx.drawImage(crowdStrip, far.x - cw / 2, far.y - ch * 0.85, cw, ch);
+      ctx.globalAlpha = 1;
+    }
+  }
 
-  ctx.save();
-  // Court boundary
-  const tl = toScreen(0, 0);
-  const br = toScreen(W, H);
-  ctx.strokeStyle = "rgba(249,115,22,0.55)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+  // Ground apron
+  const apron = projectGroundPoly(
+    [
+      [-8, -10],
+      [W + 8, -10],
+      [W + 8, H + 10],
+      [-8, H + 10],
+    ],
+    cam,
+    cssW,
+    cssH,
+  );
+  if (apron) {
+    ctx.fillStyle = "#3f3f46";
+    fillProjectedPoly(ctx, apron);
+  }
 
-  // Center line + circle
-  const mid = toScreen(0, H / 2);
-  const midR = toScreen(W, H / 2);
+  // Court slab
+  const slab = projectGroundPoly(
+    [
+      [0, 0],
+      [W, 0],
+      [W, H],
+      [0, H],
+    ],
+    cam,
+    cssW,
+    cssH,
+  );
+  if (slab) {
+    if (woodReady && woodTile) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(slab[0]!.x, slab[0]!.y);
+      for (let i = 1; i < slab.length; i++) ctx.lineTo(slab[i]!.x, slab[i]!.y);
+      ctx.closePath();
+      ctx.clip();
+      const pattern = ctx.createPattern(woodTile, "repeat");
+      if (pattern) {
+        ctx.fillStyle = pattern;
+        ctx.fillRect(0, 0, cssW, cssH);
+      }
+      ctx.fillStyle = "rgba(194, 92, 28, 0.35)";
+      ctx.fillRect(0, 0, cssW, cssH);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "#c2410c";
+      fillProjectedPoly(ctx, slab);
+    }
+
+    ctx.strokeStyle = "rgba(255,255,255,0.92)";
+    ctx.lineWidth = 2.5;
+    strokeProjectedPoly(ctx, slab);
+  }
+
+  // Center line
+  const midA = projectCourt(0, H / 2, cam, cssW, cssH);
+  const midB = projectCourt(W, H / 2, cam, cssW, cssH);
+  if (midA && midB) {
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 2;
+    strokeProjectedLine(ctx, midA, midB);
+  }
+
+  // Center circle (approx as projected ellipse via samples)
+  ctx.strokeStyle = "rgba(255,255,255,0.85)";
   ctx.beginPath();
-  ctx.moveTo(mid.x, mid.y);
-  ctx.lineTo(midR.x, midR.y);
-  ctx.stroke();
-  const c = toScreen(25, H / 2);
-  ctx.beginPath();
-  ctx.arc(c.x, c.y, 6 * scale, 0, Math.PI * 2);
+  let started = false;
+  for (let i = 0; i <= 40; i++) {
+    const ang = (i / 40) * Math.PI * 2;
+    const p = projectCourt(
+      25 + Math.cos(ang) * 6,
+      H / 2 + Math.sin(ang) * 6,
+      cam,
+      cssW,
+      cssH,
+    );
+    if (!p) continue;
+    if (!started) {
+      ctx.moveTo(p.x, p.y);
+      started = true;
+    } else ctx.lineTo(p.x, p.y);
+  }
+  ctx.closePath();
   ctx.stroke();
 
   // Keys
-  ctx.strokeStyle = "rgba(249,115,22,0.32)";
-  const k1 = toScreen(16, 0);
-  const k2 = toScreen(16, H - 14);
-  ctx.strokeRect(k1.x, k1.y, 18 * scale, 14 * scale);
-  ctx.strokeRect(k2.x, k2.y, 18 * scale, 14 * scale);
+  const keyPolys: Array<Array<[number, number]>> = [
+    [
+      [16, 0],
+      [34, 0],
+      [34, 19],
+      [16, 19],
+    ],
+    [
+      [16, H - 19],
+      [34, H - 19],
+      [34, H],
+      [16, H],
+    ],
+  ];
+  for (const corners of keyPolys) {
+    const poly = projectGroundPoly(corners, cam, cssW, cssH);
+    if (!poly) continue;
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
+    fillProjectedPoly(ctx, poly);
+    ctx.strokeStyle = "rgba(255,255,255,0.88)";
+    ctx.lineWidth = 2;
+    strokeProjectedPoly(ctx, poly);
+  }
 
-  // Shot clock painted in the offensive key (basket being attacked).
+  // 3pt arcs (sampled)
+  for (const [cy, flip] of [
+    [4, 1],
+    [H - 4, -1],
+  ] as const) {
+    ctx.beginPath();
+    let on = false;
+    for (let i = 0; i <= 32; i++) {
+      const t = i / 32;
+      const ang = flip > 0 ? Math.PI * 0.12 + t * (Math.PI - 0.24) : Math.PI + 0.12 + t * (Math.PI - 0.24);
+      const p = projectCourt(25 + Math.cos(ang) * 16, cy + Math.sin(ang) * 16, cam, cssW, cssH);
+      if (!p) continue;
+      if (!on) {
+        ctx.moveTo(p.x, p.y);
+        on = true;
+      } else ctx.lineTo(p.x, p.y);
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Shot clock on paint
   const offense = possessionSide(state);
   if (offense && !intro && !state.over) {
     const atTop = offense === "you";
-    const clockPt = toScreen(25, atTop ? 7.5 : H - 7.5);
-    const sec = Math.ceil(Math.max(0, state.shotClock - 1e-6));
-    const urgent = sec <= 6;
-    ctx.save();
-    ctx.globalAlpha = urgent ? 0.9 : 0.32;
-    ctx.fillStyle = urgent ? "#ef4444" : "#9ca3af";
-    ctx.font = `bold ${Math.max(28, Math.round(6.2 * scale))}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(String(sec), clockPt.x, clockPt.y);
-    ctx.restore();
+    const clockPt = projectCourt(25, atTop ? 9 : H - 9, cam, cssW, cssH, 0.2);
+    if (clockPt) {
+      const sec = Math.ceil(Math.max(0, state.shotClock - 1e-6));
+      const urgent = sec <= 6;
+      ctx.save();
+      ctx.globalAlpha = urgent ? 0.95 : 0.4;
+      ctx.fillStyle = urgent ? "#ef4444" : "#f8fafc";
+      ctx.font = `bold ${Math.max(22, Math.round(clockPt.scale * 3.2))}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(sec), clockPt.x, clockPt.y);
+      ctx.restore();
+    }
   }
 
-  // Hoops — backboard, rim, net
   const hoopPulse =
     state.ball.inAir && state.ball.targetBasket
       ? 1 + Math.sin(now / 80) * 0.12
       : 1;
-  drawHoop(ctx, toScreen, scale, 25, 4, 1, state.ball.targetBasket === "opp" && state.ball.inAir, hoopPulse);
-  drawHoop(
+  drawHoop3D(
     ctx,
-    toScreen,
-    scale,
-    25,
+    cam,
+    cssW,
+    cssH,
+    4,
+    1,
+    state.ball.targetBasket === "opp" && state.ball.inAir,
+    hoopPulse,
+  );
+  drawHoop3D(
+    ctx,
+    cam,
+    cssW,
+    cssH,
     H - 4,
     -1,
     state.ball.targetBasket === "you" && state.ball.inAir,
     hoopPulse,
   );
 
-  // Attack-direction chevrons (your basket is top)
-  ctx.fillStyle = "rgba(251,146,60,0.35)";
-  ctx.font = `bold ${Math.max(11, Math.round(2.2 * scale))}px sans-serif`;
-  ctx.textAlign = "center";
-  const tip = toScreen(25, Math.max(originY + 3, 6));
-  if (tip.y > 8 && tip.y < cssH - 8) {
-    ctx.fillText("▲ YOUR HOOP", tip.x, tip.y);
-  }
-
-  // Live tip-off paint on the court itself (no solid page cover)
   if (intro) {
-    const bounce = Math.sin(now / 220) * 1.2;
-    // Big attack arrows stacked toward your hoop
     for (let i = 0; i < 4; i++) {
-      const ay = 48 - i * 8 + bounce;
-      const ap = toScreen(25, ay);
-      const alpha = 0.35 + i * 0.15;
-      ctx.globalAlpha = alpha;
+      const ay = 48 - i * 8;
+      const ap = projectCourt(25, ay, cam, cssW, cssH, 0.5);
+      if (!ap) continue;
+      ctx.globalAlpha = 0.35 + i * 0.14;
       ctx.fillStyle = i % 2 === 0 ? "#fb923c" : "#fdba74";
       ctx.beginPath();
-      ctx.moveTo(ap.x, ap.y - 2.2 * scale);
-      ctx.lineTo(ap.x - 2.4 * scale, ap.y + 1.4 * scale);
-      ctx.lineTo(ap.x + 2.4 * scale, ap.y + 1.4 * scale);
+      ctx.moveTo(ap.x, ap.y - 1.2 * ap.scale);
+      ctx.lineTo(ap.x - 1.4 * ap.scale, ap.y + 0.8 * ap.scale);
+      ctx.lineTo(ap.x + 1.4 * ap.scale, ap.y + 0.8 * ap.scale);
       ctx.closePath();
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-
-    // Team color ribbons across midcourt
-    const midL = toScreen(4, H / 2 - 3);
-    const midR = toScreen(46, H / 2 - 3);
-    ctx.fillStyle = "rgba(249,115,22,0.28)";
-    ctx.fillRect(midL.x, midL.y, midR.x - midL.x, 2.2 * scale);
-    ctx.fillStyle = "rgba(96,165,250,0.28)";
-    ctx.fillRect(midL.x, midL.y + 2.4 * scale, midR.x - midL.x, 2.2 * scale);
-
-    // Side badges painted on floor
-    const youBadge = toScreen(9, 70);
-    const oppBadge = toScreen(41, 22);
-    ctx.font = `bold ${Math.max(12, Math.round(2.4 * scale))}px sans-serif`;
+    const youBadge = projectCourt(10, 70, cam, cssW, cssH, 0.4);
+    const oppBadge = projectCourt(40, 24, cam, cssW, cssH, 0.4);
+    ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillStyle = "#fb923c";
-    ctx.fillText(`${you.year} ${you.team.abbreviation}`, youBadge.x, youBadge.y);
-    ctx.fillStyle = "#60a5fa";
-    ctx.fillText(`${opp.year} ${opp.team.abbreviation}`, oppBadge.x, oppBadge.y);
-
-    // Orbit sparks around ball
-    for (let i = 0; i < 8; i++) {
-      const ang = now / 280 + (i * Math.PI) / 4;
-      const ox = state.ball.x + Math.cos(ang) * 4.5;
-      const oy = state.ball.y + Math.sin(ang) * 4.5;
-      const sp = toScreen(ox, oy);
-      ctx.fillStyle = i % 2 === 0 ? "#fdba74" : "#93c5fd";
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y, 0.45 * scale, 0, Math.PI * 2);
-      ctx.fill();
+    if (youBadge) {
+      ctx.fillStyle = "#ffedd5";
+      ctx.fillText(`${you.year} ${you.team.abbreviation}`, youBadge.x, youBadge.y);
+    }
+    if (oppBadge) {
+      ctx.fillStyle = "#dbeafe";
+      ctx.fillText(`${opp.year} ${opp.team.abbreviation}`, oppBadge.x, oppBadge.y);
     }
   }
 
-  // Players — Jetpack Joyride chibi bodies with walk cycles
-  // Draw back-to-front by court Y so overlaps read correctly.
-  const sorted = [...state.actors].sort((p, q) => p.y - q.y);
-  for (const a of sorted) {
-    const { x, y } = toScreen(a.x, a.y);
-    const r = PLAYER_R * scale;
-    if (x < -r * 3 || x > cssW + r * 3 || y < -r * 4 || y > cssH + r * 5) continue;
+  // Depth-sort players + ball for true 3D occlusion
+  type DrawItem =
+    | { kind: "actor"; a: Actor; p: NonNullable<ReturnType<typeof projectCourt>> }
+    | { kind: "ball"; p: NonNullable<ReturnType<typeof projectCourt>>; r: number; spin: number };
+
+  const items: DrawItem[] = [];
+  for (const a of state.actors) {
+    const p = projectCourt(a.x, a.y, cam, cssW, cssH, 0);
+    if (!p) continue;
+    if (p.x < -80 || p.x > cssW + 80 || p.y < -80 || p.y > cssH + 120) continue;
+    items.push({ kind: "actor", a, p });
+  }
+  {
+    const ballH = state.ball.inAir ? 3.4 : state.ball.loose ? 0.9 : 1.1;
+    const p = projectCourt(state.ball.x, state.ball.y, cam, cssW, cssH, ballH);
+    if (p) {
+      const ballScale = state.ball.inAir ? 1.18 : state.ball.loose ? 1.1 : 1;
+      items.push({
+        kind: "ball",
+        p,
+        r: BALL_R * p.scale * 0.55 * ballScale,
+        spin: state.ball.inAir || state.ball.loose ? now / 140 : now / 400,
+      });
+    }
+  }
+  items.sort((a, b) => b.p.depth - a.p.depth);
+
+  for (const item of items) {
+    if (item.kind === "ball") {
+      drawBasketball(ctx, item.p.x, item.p.y, item.r, item.spin);
+      continue;
+    }
+    const { a, p } = item;
     const youSide = a.side === "you";
     const speed = Math.hypot(a.vx, a.vy);
     const releasing =
@@ -2726,13 +2889,13 @@ function drawCourt(
       (now < state.meter.holdUntil && state.ball.shooterId === a.id);
     const pose: SpritePose = releasing ? "shoot" : speed > 2.2 ? "run" : "idle";
     drawCourtCallSprite(ctx, {
-      x,
-      y,
-      scale,
+      x: p.x,
+      y: p.y,
+      scale: p.scale * 0.9,
       dna: a.dna,
-      jersey: youSide ? "#ea580c" : "#3b82f6",
-      jerseyDark: youSide ? "#c2410c" : "#1d4ed8",
-      shorts: youSide ? "#9a3412" : "#1e3a8a",
+      jersey: youSide ? "#f59e0b" : "#f8fafc",
+      jerseyDark: youSide ? "#b45309" : "#cbd5e1",
+      shorts: youSide ? "#1e3a8a" : "#e2e8f0",
       faceX: a.faceX,
       faceY: a.faceY,
       vx: a.vx,
@@ -2740,74 +2903,42 @@ function drawCourt(
       now,
       controlled: a.id === state.controlId,
       lastName: a.lastName,
-      labelColor: youSide ? "#ffedd5" : "#dbeafe",
+      labelColor: youSide ? "#ffedd5" : "#f8fafc",
       phaseOffset: a.dna.seed * 0.0017,
       pose,
       faceLive: a.faceLive,
+      volumetric: true,
     });
   }
 
-  // Ball
-  const b = toScreen(state.ball.x, state.ball.y);
-  const ballScale = state.ball.inAir ? 1.22 : state.ball.loose ? 1.12 : 1;
-  const ballR = BALL_R * scale * ballScale;
-  const spin = state.ball.inAir || state.ball.loose ? now / 140 : now / 400;
-  drawBasketball(ctx, b.x, b.y, ballR, spin);
-  if (state.ball.loose) {
-    const pulse = 0.5 + Math.sin(now / 90) * 0.5;
-    ctx.strokeStyle = `rgba(253,224,71,${0.35 + pulse * 0.45})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, ballR * (1.85 + pulse * 0.35), 0, Math.PI * 2);
-    ctx.stroke();
-  } else if (!state.ball.inAir && state.ball.ownerId) {
-    const pulse = 0.5 + Math.sin(now / 120) * 0.5;
-    ctx.strokeStyle = `rgba(251,146,60,${0.2 + pulse * 0.3})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, ballR * (1.55 + pulse * 0.3), 0, Math.PI * 2);
-    ctx.stroke();
-  } else if (state.ball.inAir) {
-    ctx.strokeStyle = "rgba(253,186,116,0.45)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, ballR * 1.9, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  // FX particles / floating text
-  for (const p of state.fx) {
-    const sp = toScreen(p.x, p.y);
-    const alpha = clamp(p.life / p.maxLife, 0, 1);
-    if (p.text) {
-      ctx.globalAlpha = alpha;
-      ctx.font = `bold ${Math.max(14, Math.round(3.2 * scale))}px sans-serif`;
+  for (const fx of state.fx) {
+    const sp = projectCourt(fx.x, fx.y, cam, cssW, cssH, fx.text ? 2.5 : 1);
+    if (!sp) continue;
+    const alpha = clamp(fx.life / fx.maxLife, 0, 1);
+    ctx.globalAlpha = alpha;
+    if (fx.text) {
+      ctx.font = `bold ${Math.max(14, Math.round(sp.scale * 2.2))}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = p.color;
-      ctx.fillText(p.text, sp.x, sp.y);
-      ctx.globalAlpha = 1;
+      ctx.fillStyle = fx.color;
+      ctx.fillText(fx.text, sp.x, sp.y);
     } else {
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = p.color;
+      ctx.fillStyle = fx.color;
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y, p.size * scale, 0, Math.PI * 2);
+      ctx.arc(sp.x, sp.y, fx.size * sp.scale * 0.45, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 1;
     }
+    ctx.globalAlpha = 1;
   }
 
-  // Score flash ribbon
   if (now < state.scorePulseUntil) {
     const t = (state.scorePulseUntil - now) / 900;
-    ctx.globalAlpha = clamp(t, 0, 0.85);
+    ctx.globalAlpha = clamp(t, 0, 0.75);
     ctx.fillStyle =
       state.lastScorer === "you"
         ? "rgba(249,115,22,0.35)"
         : "rgba(59,130,246,0.35)";
-    ctx.fillRect(0, cssH * 0.38, cssW, cssH * 0.18);
+    ctx.fillRect(0, cssH * 0.35, cssW, cssH * 0.2);
     ctx.globalAlpha = 1;
   }
-
-  ctx.restore();
 }

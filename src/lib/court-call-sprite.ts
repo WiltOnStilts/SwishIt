@@ -1,4 +1,4 @@
-/** Jetpack Joyride–style chibi basketball sprites for Court Call. */
+/** MyCAREER / blacktop cartoon athletes for Court Call. */
 
 import type { FaceDna, FaceExpression } from "@/lib/player-face";
 
@@ -19,7 +19,7 @@ export type FaceLive = {
 export type SpriteDrawOpts = {
   x: number;
   y: number;
-  /** Pixels per court unit. */
+  /** Pixels per court unit (already perspective-scaled in 3D mode). */
   scale: number;
   dna: FaceDna;
   jersey: string;
@@ -39,6 +39,8 @@ export type SpriteDrawOpts = {
   pose: SpritePose;
   /** Live blended face — morphs smoothly between actions. */
   faceLive: FaceLive;
+  /** Stronger rim light / cylinder limbs for the 3D court camera. */
+  volumetric?: boolean;
 };
 
 export function restingFaceLive(expression: FaceExpression): FaceLive {
@@ -778,7 +780,19 @@ function strokeLimb(
   y1: number,
   width: number,
   color: string,
+  shade?: string,
 ) {
+  // Soft under-stroke for thickness / occlusion
+  if (shade) {
+    ctx.strokeStyle = shade;
+    ctx.lineWidth = width * 1.18;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.lineCap = "round";
@@ -787,11 +801,28 @@ function strokeLimb(
   ctx.moveTo(x0, y0);
   ctx.lineTo(x1, y1);
   ctx.stroke();
+  // Specular ridge along the limb for a 3D cylinder read
+  if (shade) {
+    const mx = (x0 + x1) / 2;
+    const my = (y0 + y1) / 2;
+    const nx = -(y1 - y0);
+    const ny = x1 - x0;
+    const nl = Math.hypot(nx, ny) || 1;
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = Math.max(1, width * 0.22);
+    ctx.beginPath();
+    ctx.moveTo(x0 + (nx / nl) * width * 0.18, y0 + (ny / nl) * width * 0.18);
+    ctx.lineTo(x1 + (nx / nl) * width * 0.18, y1 + (ny / nl) * width * 0.18);
+    ctx.stroke();
+    void mx;
+    void my;
+  }
 }
 
 /**
- * Draw a chibi player: big head, short legs, walk cycle, team jersey.
- * `x,y` is the gameplay center (torso); feet sit below.
+ * Draw a MyCAREER / blacktop cartoon athlete: tall athletic build, big
+ * expressive head, sleeveless jersey, baggy shorts, chunky white sneakers.
+ * `x,y` is the gameplay center (torso); feet sit below on the court.
  */
 export function drawCourtCallSprite(
   ctx: CanvasRenderingContext2D,
@@ -816,44 +847,43 @@ export function drawCourtCallSprite(
     phaseOffset,
     pose,
     faceLive,
+    volumetric = false,
   } = opts;
 
   const s = scale;
   const speed = Math.hypot(vx, vy);
   const moving = pose === "run" || speed > 1.4;
-  // Slow, loping walk — long strides, not locked to move speed.
-  const strideAmt = pose === "shoot" ? 0.08 : moving ? 1 : 0.12;
-  const cadence = 1.55;
+  const strideAmt = pose === "shoot" ? 0.1 : moving ? 1 : 0.14;
+  const cadence = 1.45;
   const phase = (now / 1000) * cadence * Math.PI * 2 + phaseOffset;
   const bob =
     (moving && pose !== "shoot"
-      ? Math.abs(Math.sin(phase * 2)) * 0.22 * strideAmt
-      : Math.sin(now / 220) * 0.06) * s;
+      ? Math.abs(Math.sin(phase * 2)) * 0.18 * strideAmt
+      : Math.sin(now / 240) * 0.05) * s;
 
-  // Proportions — oversized JJR head, compact body
-  const headR = 2.15 * s;
-  const torsoW = 1.85 * s;
-  const torsoH = 1.4 * s;
-  const thighLen = 0.78 * s;
-  const shinLen = 0.72 * s;
+  // Athletic MyCAREER proportions — slightly taller/thicker in volumetric mode.
+  const v = volumetric ? 1.12 : 1;
+  const headR = 1.72 * s * (volumetric ? 1.05 : 1);
+  const torsoW = 2.15 * s * v;
+  const torsoH = 2.05 * s * v;
+  const thighLen = 1.15 * s * v;
+  const shinLen = 1.05 * s * v;
   const legSpan = thighLen + shinLen;
-  const legW = 0.52 * s;
-  const upperArm = 0.62 * s;
-  const foreArm = 0.58 * s;
-  const armW = 0.4 * s;
-  const shoeR = 0.4 * s;
-  const handSize = armW * 0.85;
+  const legW = 0.62 * s * v;
+  const upperArm = 0.92 * s * v;
+  const foreArm = 0.82 * s * v;
+  const armW = 0.48 * s * v;
+  const shoeR = 0.48 * s * v;
+  const handSize = armW * 0.95;
 
   const cx = x;
   const cy = y + bob;
   const tx = -torsoW / 2;
-  const ty = -torsoH * 0.35;
+  const ty = -torsoH * 0.42;
 
   const fl = Math.hypot(faceX, faceY) || 1;
   const fwdX = faceX / fl;
   const fwdY = faceY / fl;
-  const rightX = -fwdY;
-  const rightY = fwdX;
 
   const limbs = gaitLimbs(
     phase,
@@ -869,22 +899,19 @@ export function drawCourtCallSprite(
     faceY,
   );
 
-  // Override arms into a release / follow-through when shooting.
   if (pose === "shoot") {
     for (const limb of limbs) {
       const isShootHand = limb.side === 1;
       if (isShootHand) {
-        // Shooting hand high toward the rim
-        limb.elbowX = limb.shoulderX + fwdX * upperArm * 0.35 + rightX * 0.15 * s;
-        limb.elbowY = limb.shoulderY - upperArm * 0.95;
-        limb.handX = limb.elbowX + fwdX * foreArm * 0.55;
-        limb.handY = limb.elbowY - foreArm * 0.85;
+        limb.elbowX = limb.shoulderX + fwdX * upperArm * 0.3;
+        limb.elbowY = limb.shoulderY - upperArm * 1.05;
+        limb.handX = limb.elbowX + fwdX * foreArm * 0.45;
+        limb.handY = limb.elbowY - foreArm * 0.95;
       } else {
-        // Guide hand at cheek / ball line
-        limb.elbowX = limb.shoulderX + fwdX * upperArm * 0.4 + rightX * -0.1 * s;
-        limb.elbowY = limb.shoulderY - upperArm * 0.35;
-        limb.handX = limb.elbowX + fwdX * foreArm * 0.5;
-        limb.handY = limb.elbowY - foreArm * 0.15;
+        limb.elbowX = limb.shoulderX + fwdX * upperArm * 0.35;
+        limb.elbowY = limb.shoulderY - upperArm * 0.4;
+        limb.handX = limb.elbowX + fwdX * foreArm * 0.55;
+        limb.handY = limb.elbowY - foreArm * 0.2;
       }
       limb.depth = isShootHand ? 2 : 1;
     }
@@ -899,22 +926,30 @@ export function drawCourtCallSprite(
 
   ctx.save();
 
-  // Ground shadow
-  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  // Soft ground contact shadow (perspective footprint).
+  ctx.fillStyle = volumetric ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.32)";
   ctx.beginPath();
-  ctx.ellipse(cx, cy + torsoH * 0.55 + legSpan + 2, torsoW * 0.75, 0.45 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(
+    cx,
+    cy + torsoH * 0.55 + legSpan + shoeR * 0.4,
+    torsoW * (volumetric ? 1.15 : 0.95),
+    (volumetric ? 0.42 : 0.55) * s,
+    0,
+    0,
+    Math.PI * 2,
+  );
   ctx.fill();
 
   if (controlled) {
-    const pulse = 0.3 + Math.sin(now / 140) * 0.2;
+    const pulse = 0.35 + Math.sin(now / 140) * 0.22;
     ctx.strokeStyle = `rgba(255,247,237,${pulse})`;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.8;
     ctx.beginPath();
     ctx.ellipse(
       cx,
-      cy + torsoH * 0.55 + legSpan + 2,
-      torsoW * 0.95,
-      0.55 * s,
+      cy + torsoH * 0.55 + legSpan + shoeR * 0.4,
+      torsoW * 1.15,
+      0.68 * s,
       0,
       0,
       Math.PI * 2,
@@ -924,39 +959,93 @@ export function drawCourtCallSprite(
 
   ctx.translate(cx, cy);
 
+  const drawSneaker = (limb: LimbPose) => {
+    const ang = Math.atan2(fwdY, fwdX);
+    const sx = limb.footX + fwdX * shoeR * 0.35;
+    const sy = limb.footY + shoeR * 0.15;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(ang * 0.35);
+    // Sole
+    ctx.fillStyle = "#e5e7eb";
+    ctx.beginPath();
+    ctx.ellipse(0, shoeR * 0.15, shoeR * 1.55, shoeR * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // White upper
+    ctx.fillStyle = "#f8fafc";
+    ctx.beginPath();
+    ctx.ellipse(shoeR * 0.1, -shoeR * 0.05, shoeR * 1.35, shoeR * 0.48, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Toe cap
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.ellipse(shoeR * 0.85, 0, shoeR * 0.55, shoeR * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Accent swoosh
+    ctx.strokeStyle = jersey;
+    ctx.lineWidth = Math.max(1.5, shoeR * 0.22);
+    ctx.beginPath();
+    ctx.moveTo(-shoeR * 0.55, shoeR * 0.05);
+    ctx.quadraticCurveTo(0, -shoeR * 0.35, shoeR * 0.7, -shoeR * 0.05);
+    ctx.stroke();
+    // Lace dots
+    ctx.fillStyle = "#94a3b8";
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(-shoeR * 0.15 + i * shoeR * 0.28, -shoeR * 0.22, shoeR * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
   const drawLeg = (limb: LimbPose) => {
-    strokeLimb(ctx, limb.hipX, limb.hipY * 0.25, limb.kneeX, limb.kneeY, legW, shorts);
+    // Shorts overhang
+    strokeLimb(
+      ctx,
+      limb.hipX,
+      limb.hipY * 0.15,
+      limb.kneeX,
+      limb.kneeY,
+      legW,
+      shorts,
+      volumetric ? jerseyDark : undefined,
+    );
+    // Calf
     strokeLimb(
       ctx,
       limb.kneeX,
       limb.kneeY,
       limb.footX,
-      limb.footY - shoeR * 0.2,
-      legW * 0.92,
+      limb.footY - shoeR * 0.35,
+      legW * 0.88,
       dna.skin,
+      volumetric ? dna.skinShade : undefined,
     );
     ctx.fillStyle = dna.skinShade;
     ctx.beginPath();
-    ctx.arc(limb.kneeX, limb.kneeY, legW * 0.38, 0, Math.PI * 2);
+    ctx.arc(limb.kneeX, limb.kneeY, legW * 0.4, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#111827";
+    // Sock
+    ctx.fillStyle = "#f1f5f9";
     ctx.beginPath();
     ctx.ellipse(
-      limb.footX + fwdX * shoeR * 0.45,
-      limb.footY + fwdY * shoeR * 0.45,
-      shoeR * 1.25,
-      shoeR * 0.62,
-      Math.atan2(fwdY, fwdX),
+      limb.footX,
+      limb.footY - shoeR * 0.55,
+      legW * 0.42,
+      shoeR * 0.45,
+      0,
       0,
       Math.PI * 2,
     );
     ctx.fill();
+    drawSneaker(limb);
   };
 
   const drawArm = (limb: LimbPose) => {
+    // Deltoid / jersey sleeve cut
     ctx.fillStyle = jerseyDark;
     ctx.beginPath();
-    ctx.arc(limb.shoulderX, limb.shoulderY, armW * 0.7, 0, Math.PI * 2);
+    ctx.arc(limb.shoulderX, limb.shoulderY, armW * 0.85, 0, Math.PI * 2);
     ctx.fill();
     strokeLimb(
       ctx,
@@ -964,8 +1053,9 @@ export function drawCourtCallSprite(
       limb.shoulderY,
       limb.elbowX,
       limb.elbowY,
-      armW,
+      armW * 1.05,
       dna.skin,
+      volumetric ? dna.skinShade : undefined,
     );
     strokeLimb(
       ctx,
@@ -973,14 +1063,27 @@ export function drawCourtCallSprite(
       limb.elbowY,
       limb.handX,
       limb.handY,
-      armW * 0.9,
+      armW * 0.92,
       dna.skin,
+      volumetric ? dna.skinShade : undefined,
     );
+    // Bicep highlight
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.beginPath();
+    ctx.arc(
+      (limb.shoulderX + limb.elbowX) / 2 - armW * 0.12,
+      (limb.shoulderY + limb.elbowY) / 2,
+      armW * 0.28,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
     ctx.fillStyle = dna.skinShade;
     ctx.beginPath();
-    ctx.arc(limb.elbowX, limb.elbowY, armW * 0.35, 0, Math.PI * 2);
+    ctx.arc(limb.elbowX, limb.elbowY, armW * 0.38, 0, Math.PI * 2);
     ctx.fill();
-    const handAng = Math.atan2(limb.handY - limb.elbowY, limb.handX - limb.elbowX) + Math.PI / 2;
+    const handAng =
+      Math.atan2(limb.handY - limb.elbowY, limb.handX - limb.elbowX) + Math.PI / 2;
     drawHand(
       ctx,
       limb.handX,
@@ -996,34 +1099,109 @@ export function drawCourtCallSprite(
   drawLeg(back);
   drawArm(back);
 
-  ctx.fillStyle = jersey;
-  roundRect(ctx, tx, ty, torsoW, torsoH, torsoW * 0.28);
+  // Jersey torso with collar + side panels (lit like a 3D form)
+  const jerseyGrad = ctx.createLinearGradient(tx, ty, tx + torsoW, ty + torsoH);
+  jerseyGrad.addColorStop(0, jersey);
+  jerseyGrad.addColorStop(0.45, jersey);
+  jerseyGrad.addColorStop(0.78, jerseyDark);
+  jerseyGrad.addColorStop(1, jerseyDark);
+  ctx.fillStyle = jerseyGrad;
+  roundRect(ctx, tx, ty, torsoW, torsoH, torsoW * 0.22);
   ctx.fill();
+  if (volumetric) {
+    // Side wrap shade
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    roundRect(ctx, tx + torsoW * 0.72, ty + torsoH * 0.08, torsoW * 0.28, torsoH * 0.84, torsoW * 0.1);
+    ctx.fill();
+    // Chest highlight
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    roundRect(ctx, tx + torsoW * 0.16, ty + torsoH * 0.14, torsoW * 0.34, torsoH * 0.4, torsoW * 0.12);
+    ctx.fill();
+  }
+  // Neck scoop
+  ctx.fillStyle = dna.skin;
+  ctx.beginPath();
+  ctx.ellipse(0, ty + torsoH * 0.02, torsoW * 0.22, torsoH * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = Math.max(1, s * 0.08);
+  ctx.beginPath();
+  ctx.ellipse(0, ty + torsoH * 0.08, torsoW * 0.28, torsoH * 0.14, 0, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.stroke();
+  // Side panels
   ctx.fillStyle = jerseyDark;
-  roundRect(ctx, tx + torsoW * 0.12, ty, torsoW * 0.76, torsoH * 0.22, torsoW * 0.12);
+  roundRect(ctx, tx, ty + torsoH * 0.18, torsoW * 0.14, torsoH * 0.7, torsoW * 0.06);
   ctx.fill();
-  ctx.fillStyle = shorts;
   roundRect(
     ctx,
-    tx + torsoW * 0.08,
-    ty + torsoH * 0.72,
-    torsoW * 0.84,
-    torsoH * 0.32,
-    torsoW * 0.12,
+    tx + torsoW * 0.86,
+    ty + torsoH * 0.18,
+    torsoW * 0.14,
+    torsoH * 0.7,
+    torsoW * 0.06,
   );
   ctx.fill();
+  // Jersey sheen
+  ctx.fillStyle = "rgba(255,255,255,0.14)";
+  roundRect(
+    ctx,
+    tx + torsoW * 0.18,
+    ty + torsoH * 0.12,
+    torsoW * 0.22,
+    torsoH * 0.55,
+    torsoW * 0.1,
+  );
+  ctx.fill();
+
+  // Baggy shorts
+  const shortsGrad = ctx.createLinearGradient(0, ty + torsoH * 0.62, 0, ty + torsoH * 1.15);
+  shortsGrad.addColorStop(0, shorts);
+  shortsGrad.addColorStop(1, jerseyDark);
+  ctx.fillStyle = shortsGrad;
+  roundRect(
+    ctx,
+    tx - torsoW * 0.06,
+    ty + torsoH * 0.62,
+    torsoW * 1.12,
+    torsoH * 0.55,
+    torsoW * 0.16,
+  );
+  ctx.fill();
+  // Waistband
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  roundRect(
+    ctx,
+    tx - torsoW * 0.02,
+    ty + torsoH * 0.62,
+    torsoW * 1.04,
+    torsoH * 0.1,
+    torsoW * 0.06,
+  );
+  ctx.fill();
+  // Shorts split
+  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  ctx.lineWidth = Math.max(1, s * 0.06);
+  ctx.beginPath();
+  ctx.moveTo(0, ty + torsoH * 0.78);
+  ctx.lineTo(0, ty + torsoH * 1.12);
+  ctx.stroke();
 
   drawLeg(front);
   drawArm(front);
 
-  // Oversized detailed head — live morphing expression
+  // Big cartoon head (2K park style)
   const hx = 0;
-  const hy = ty - headR * 0.62;
+  const hy = ty - headR * 0.55;
   drawFace(ctx, dna, hx, hy, headR, faceLive);
+
+  // Neck
+  ctx.fillStyle = dna.skin;
+  roundRect(ctx, -headR * 0.28, hy + headR * 0.72, headR * 0.56, headR * 0.35, headR * 0.12);
+  ctx.fill();
 
   ctx.restore();
 
-  const labelY = cy + torsoH * 0.55 + legSpan + 6;
+  const labelY = cy + torsoH * 0.55 + legSpan + shoeR + 5;
   const fontSize = Math.max(10, Math.round(1.05 * s));
   ctx.font = `bold ${fontSize}px sans-serif`;
   ctx.textAlign = "center";

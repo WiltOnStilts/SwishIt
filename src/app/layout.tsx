@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "SwishIt — Basketball Minigames",
   description:
-    "Free mobile-first basketball minigames: Undefeated all-time drafts, Detective daily NBA Connections, Superstar Studio career builds, and Court Call 5-on-5 arcade play.",
+    "Free mobile-first basketball minigames: Undefeated all-time drafts, Detective daily NBA Connections, Superstar Studio career builds, and Court Call blacktop 1v1–5v5.",
   alternates: {
     canonical: "/",
   },
